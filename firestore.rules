@@ -1,0 +1,98 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default-deny global safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner() {
+      return isSignedIn() && (
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
+        request.auth.uid == 'owner_master_uid'
+      );
+    }
+
+    function isVisitor(visitorId) {
+      return isSignedIn() && request.auth.uid == visitorId;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    // Admin authorization collection
+    match /admins/{adminId} {
+      allow read: if isSignedIn() && (request.auth.uid == adminId || isOwner());
+      allow write: if false; // Privileged server-side deployment only
+    }
+
+    // Visitor profile and threads
+    match /visitors/{visitorId} {
+      allow get: if isOwner() || isVisitor(visitorId);
+      allow list: if isOwner();
+
+      allow create: if isSignedIn() && request.auth.uid == visitorId &&
+        isValidVisitor(incoming());
+
+      allow update: if isOwner() || (
+        isVisitor(visitorId) &&
+        incoming().diff(existing()).affectedKeys().hasOnly(['lastActiveAt', 'unreadCount'])
+      );
+
+      // Private visitor message subcollection
+      match /messages/{messageId} {
+        allow read: if isOwner() || isVisitor(visitorId);
+
+        allow create: if (
+          isVisitor(visitorId) &&
+          incoming().sender == 'visitor' &&
+          incoming().visitorId == visitorId &&
+          incoming().text is string &&
+          incoming().text.size() > 0 &&
+          incoming().text.size() <= 1000
+        ) || (
+          isOwner() &&
+          incoming().sender == 'owner' &&
+          incoming().text is string &&
+          incoming().text.size() > 0 &&
+          incoming().text.size() <= 1000
+        );
+
+        allow update: if (isOwner() || isVisitor(visitorId)) &&
+          incoming().diff(existing()).affectedKeys().hasOnly(['read']);
+
+        allow delete: if isOwner();
+      }
+    }
+
+    // Typing heartbeat state
+    match /states/{visitorId} {
+      allow read: if isOwner() || isVisitor(visitorId);
+      allow write: if isOwner() || isVisitor(visitorId);
+    }
+
+
+    function isValidVisitor(data) {
+      return data.keys().hasAll(['id', 'displayName', 'normalizedName', 'publicId']) &&
+        data.id is string &&
+        data.displayName is string &&
+        data.displayName.size() >= 2 &&
+        data.displayName.size() <= 32 &&
+        data.publicId is string &&
+        data.publicId.size() == 6;
+    }
+  }
+}

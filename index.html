@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>DARKCHAT — MBI DARK</title>
+    <meta name="description" content="Zero-to-production real-time hacker terminal messaging website with same-name grouped inbox, unique visitor IDs, and owner controls." />
+    <meta property="og:title" content="DARKCHAT — MBI DARK" />
+    <meta property="og:description" content="Real-time hacker terminal messaging website with same-name grouped inbox and unique visitor IDs." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="scanlines"></div>
+
+    <div class="app-container">
+      <!-- Minimal Terminal Status Line -->
+      <header class="term-header">
+        <div class="term-brand">✿ DARKCHAT // MBI DARK</div>
+        <div class="term-meta">
+          <span id="connStatus" class="term-status" style="display: none;"></span>
+          <span id="visitorTag" class="term-public-id" style="display: none;"></span>
+        </div>
+      </header>
+
+      <!-- Terminal Stage: Real Command-Line Terminal Stream -->
+      <main class="terminal-stage" id="terminalStage">
+        <div class="terminal-output" id="terminalOutput" role="log" aria-live="polite">
+          <div id="terminalLines" class="terminal-lines"></div>
+
+          <!-- Active Input Prompt: Placed on the very next line after the latest terminal output -->
+          <div class="terminal-input-row" id="terminalInputRow">
+            <span class="prompt-prefix" id="promptPrefix">~ $ </span>
+            <div class="input-display-wrapper" id="inputWrapper">
+              <textarea
+                id="termInput"
+                class="term-native-input"
+                rows="1"
+                autocomplete="off"
+                autocorrect="off"
+                autocapitalize="sentences"
+                spellcheck="false"
+                aria-label="Terminal command or message input"
+              ></textarea>
+              <span class="term-visual-text" id="termVisualText"></span>
+              <span class="term-cursor" id="termCursor">█</span>
+            </div>
+          </div>
+
+          <!-- Real-time Typing Status -->
+          <div id="typingIndicator" class="term-typing-indicator" style="display: none;"></div>
+        </div>
+      </main>
+    </div>
+
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>

@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>DARKCHAT // OWNER CONTROL</title>
+    <meta name="description" content="DARKCHAT Owner Dashboard by MBI DARK" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div class="scanlines"></div>
+
+    <div class="owner-container">
+      <!-- Left-side Inbox Panel -->
+      <aside class="owner-sidebar" id="ownerSidebar">
+        <div class="sidebar-header">
+          <!-- Brand at top-left: Clicking toggles sidebar open/closed -->
+          <button id="brandToggleBtn" class="owner-brand-toggle" title="Toggle Inbox Panel">
+            ✿ "Mʙɪ Dᴀʀᴋ"
+          </button>
+          <div class="owner-action-bar" style="flex-wrap: wrap; gap: 4px;">
+            <button id="refreshInboxBtn" class="term-btn">SYNC</button>
+            <button id="ipBlockModalBtn" class="term-btn danger">IP BLOCKS</button>
+          </div>
+        </div>
+
+        <!-- Grouped Inbox by Normalized Name -->
+        <ul class="sidebar-inbox-list" id="inboxList">
+          <li class="term-line system-line" style="padding: 12px 14px;">[INITIALIZING INBOX STREAM...]</li>
+        </ul>
+
+        <div class="sidebar-footer">
+          <a href="./index.html" class="term-btn" style="text-decoration: none; font-size: 10px; padding: 2px 5px;" title="Switch to Visitor Chat">[VISITOR CHAT]</a>
+          <button id="logoutBtn" class="term-btn danger">[LOGOUT]</button>
+        </div>
+      </aside>
+
+      <!-- Main Conversation Transcript Area -->
+      <main class="owner-main">
+        <!-- Conversation Control Header -->
+        <header class="owner-convo-header">
+          <div class="recipient-bar">
+            <button id="brandMainToggleBtn" class="owner-brand-toggle" title="Toggle Inbox Panel" style="display: none; margin-right: 12px;">
+              ✿ "Mʙɪ Dᴀʀᴋ"
+            </button>
+            <span class="recipient-label">RECIPIENT:</span>
+            <select id="recipientSelect" class="recipient-selector" aria-label="Select Message Recipient">
+              <option value="ALL">ALL USERS (BROADCAST)</option>
+            </select>
+            <span id="activeGroupInfo" class="term-meta" style="font-size: 11px;">[SELECT A GROUP]</span>
+          </div>
+          <div id="ownerTypingIndicator" class="term-typing-indicator" style="display: none; font-size: 11px;"></div>
+        </header>
+
+        <!-- Chronological Transcript Area: Messages stream with input moving downward naturally -->
+        <div class="terminal-output" id="ownerTranscript" role="log" aria-live="polite">
+          <div id="ownerTranscriptLines" class="terminal-lines">
+            <div class="term-line system-line">[OWNER CONSOLE READY. SELECT A VISITOR GROUP FROM THE INBOX.]</div>
+          </div>
+
+          <!-- Active Owner Input Row: Sits immediately after transcript lines, moving downward -->
+          <div class="terminal-input-row" id="ownerInputRow" style="display: none;">
+            <span class="prompt-prefix" id="ownerPromptPrefix">~ (Dark) $ </span>
+            <div class="input-display-wrapper" id="ownerInputWrapper">
+              <textarea
+                id="ownerTermInput"
+                class="term-native-input"
+                rows="1"
+                autocomplete="off"
+                autocorrect="off"
+                spellcheck="false"
+                aria-label="Owner reply input"
+              ></textarea>
+              <span class="term-visual-text" id="ownerVisualText"></span>
+              <span class="term-cursor" id="ownerCursor">█</span>
+            </div>
+          </div>
+        </div>
+      </main>
+    </div>
+
+    <!-- Owner Login Terminal Modal (if unauthenticated or password required) -->
+    <div id="loginModal" class="term-modal-backdrop" style="display: none;">
+      <div class="term-modal">
+        <div class="term-modal-title">✿ OWNER AUTHENTICATION REQUIRED</div>
+        <p class="term-line system-line" style="margin-bottom: 8px;">Enter Owner password to unlock the console:</p>
+        <div style="display: flex; flex-direction: column; gap: 8px;">
+          <input type="password" id="ownerPasswordInput" class="term-modal-input" placeholder="Password" />
+        </div>
+        <div id="loginError" class="term-line error-line" style="margin-top: 6px; display: none;"></div>
+        <div class="term-modal-actions" style="margin-top: 12px;">
+          <a href="./index.html" class="term-btn" style="text-decoration: none; padding: 4px 8px;">RETURN</a>
+          <button id="ownerLoginBtn" class="term-btn">AUTHENTICATE</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- IP Block Management Modal -->
+    <div id="ipModal" class="term-modal-backdrop" style="display: none;">
+      <div class="term-modal" style="max-width: 520px;">
+        <div class="term-modal-title">✿ OWNER IP RESTRICTION MANAGEMENT</div>
+        <div class="term-line system-line" style="font-size: 11px; margin-bottom: 6px;">Manage blocked connecting IP addresses:</div>
+        <div id="blockedIpList" style="max-height: 180px; overflow-y: auto; border: 1px dashed var(--term-border); padding: 8px; margin-bottom: 8px; font-size: 11px;">
+          [Loading blocked IPs...]
+        </div>
+        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+          <input type="text" id="targetIpInput" class="term-modal-input" placeholder="Enter IP address (e.g. 192.168.1.50)" style="flex: 1;" />
+          <button id="blockIpActionBtn" class="term-btn danger">BLOCK IP</button>
+        </div>
+        <div id="ipModalMessage" class="term-line" style="font-size: 11px; display: none;"></div>
+        <div class="term-modal-actions" style="margin-top: 12px;">
+          <button id="closeIpModalBtn" class="term-btn">CLOSE</button>
+        </div>
+      </div>
+    </div>
+
+    <script type="module" src="./owner.js"></script>
+  </body>
+</html>

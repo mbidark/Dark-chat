@@ -1,0 +1,6 @@
+{
+  "name": "DARKCHAT",
+  "description": "Zero-to-production real-time hacker terminal messaging website with same-name grouped inbox, unique visitor IDs, and owner controls.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

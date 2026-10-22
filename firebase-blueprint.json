@@ -1,0 +1,66 @@
+{
+  "entities": {
+    "Visitor": {
+      "title": "Visitor",
+      "description": "Public anonymous visitor profile and conversation descriptor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Auth UID" },
+        "publicId": { "type": "string", "description": "Unambiguous 6-char public ID", "pattern": "^[23456789ABCDEFGHJKLMNPQRSTUVWXYZ]{6}$" },
+        "displayName": { "type": "string", "minLength": 2, "maxLength": 32 },
+        "normalizedName": { "type": "string", "minLength": 2, "maxLength": 32 },
+        "unreadCount": { "type": "number" },
+        "lastActiveAt": { "type": "string" },
+        "isArchived": { "type": "boolean" }
+      },
+      "required": ["id", "publicId", "displayName", "normalizedName"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "Terminal message entry inside a private visitor thread",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "visitorId": { "type": "string" },
+        "publicId": { "type": "string" },
+        "displayName": { "type": "string" },
+        "sender": { "type": "string", "enum": ["visitor", "owner"] },
+        "text": { "type": "string", "minLength": 1, "maxLength": 1000 },
+        "recipient": { "type": "string" },
+        "createdAt": { "type": "string" },
+        "read": { "type": "boolean" }
+      },
+      "required": ["id", "visitorId", "sender", "text", "createdAt"]
+    },
+    "Invitation": {
+      "title": "Invitation",
+      "description": "Cryptographically secure single-use invitation record",
+      "type": "object",
+      "properties": {
+        "token": { "type": "string", "minLength": 32 },
+        "assignedName": { "type": "string", "minLength": 2, "maxLength": 32 },
+        "createdBy": { "type": "string" },
+        "createdAt": { "type": "number" },
+        "expiresAt": { "type": "number" },
+        "used": { "type": "boolean" },
+        "usedBy": { "type": "string" },
+        "revoked": { "type": "boolean" }
+      },
+      "required": ["token", "assignedName", "createdAt", "expiresAt", "used", "revoked"]
+    }
+  },
+  "firestore": {
+    "/visitors/{visitorId}": {
+      "schema": { "$ref": "#/entities/Visitor" },
+      "description": "Root visitor collection indexed for Owner grouped inbox"
+    },
+    "/visitors/{visitorId}/messages/{messageId}": {
+      "schema": { "$ref": "#/entities/Message" },
+      "description": "Private message thread subcollection isolated per visitor"
+    },
+    "/invitations/{token}": {
+      "schema": { "$ref": "#/entities/Invitation" },
+      "description": "Secure invitation token registry"
+    }
+  }
+}
