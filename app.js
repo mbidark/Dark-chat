@@ -1,7 +1,7 @@
 /**
  * DARKCHAT — Visitor Terminal Application
  * MBI DARK | Zero-to-Production
- * Unique Visitor ID Generation per Session & Private Chat Isolation
+ * Authoritative Firebase Auth UID Identity & Private Chat Isolation
  */
 
 import {
@@ -292,20 +292,14 @@ async function handlePasswordInput(rawPassword) {
 
 async function initializeVisitorSession(displayName) {
   try {
-    // Generate a guaranteed unique visitor ID for this new session
-    const visitorId = 'vis_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
+    const authUser = await authenticateVisitor();
+    const visitorId = authUser.uid;
 
-    // Register connecting IP with backend
-    try {
-      await fetch('/api/ip/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ visitorId })
-      });
-    } catch (e) {}
-
-    const publicId = generatePublicId();
-    localStorage.setItem(`darkchat_public_${visitorId}`, publicId);
+    let publicId = localStorage.getItem(`darkchat_public_${visitorId}`);
+    if (!publicId) {
+      publicId = generatePublicId();
+      localStorage.setItem(`darkchat_public_${visitorId}`, publicId);
+    }
 
     currentVisitor = {
       id: visitorId,
@@ -315,6 +309,7 @@ async function initializeVisitorSession(displayName) {
       unreadCount: 0
     };
 
+    localStorage.setItem(`darkchat_visitor_session_${visitorId}`, JSON.stringify(currentVisitor));
     await upsertVisitorProfile(currentVisitor);
 
     await typeLine(`Success.`, 'success-line', 8);
@@ -410,18 +405,6 @@ async function startFastLoading() {
   currentState = STATE_LOADING;
   terminalLines.innerHTML = '';
 
-  // Check IP block status via backend API
-  try {
-    const ipRes = await fetch('/api/ip/status');
-    if (ipRes.ok) {
-      const ipData = await ipRes.json();
-      if (ipData && ipData.blocked) {
-        await typeLine(`[ACCESS DENIED] IP ${ipData.ip} blocked by Dark.`, 'error-line', 15);
-        return;
-      }
-    }
-  } catch (e) {}
-
   if (prefersReducedMotion) {
     terminalLines.innerHTML = `
       <div class="term-line system-line">Initializing...</div>
@@ -482,10 +465,47 @@ async function startFastLoading() {
   focusTerminal();
 }
 
+/**
+ * Boot Sequence with Authoritative Auth UID Restoration
+ */
 async function startTerminal() {
   setupInputListeners();
   syncInputDisplay();
   focusTerminal();
+
+  try {
+    const authUser = await authenticateVisitor();
+    const visitorId = authUser.uid;
+
+    const savedSessionRaw = localStorage.getItem(`darkchat_visitor_session_${visitorId}`);
+    if (savedSessionRaw) {
+      try {
+        const saved = JSON.parse(savedSessionRaw);
+        if (saved && saved.id === visitorId && saved.displayName) {
+          currentVisitor = saved;
+          terminalLines.innerHTML = '';
+          appendLine(`Now you can chat with Dark...`, 'system-line');
+
+          if (connStatus) {
+            connStatus.textContent = '[CONNECTED]';
+            connStatus.style.display = 'inline';
+          }
+          if (visitorTag) {
+            visitorTag.textContent = `ID: ${saved.publicId}`;
+            visitorTag.style.display = 'inline';
+          }
+
+          currentState = STATE_CHAT;
+          promptPrefix.textContent = `~ $ `;
+          syncInputDisplay();
+
+          startChatSubscriptions(visitorId);
+          focusTerminal();
+          return;
+        }
+      } catch (e) {}
+    }
+  } catch (e) {}
 
   await startFastLoading();
 }

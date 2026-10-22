@@ -33,10 +33,15 @@ service cloud.firestore {
       return resource.data;
     }
 
+    // Test connection path
+    match /test/connection {
+      allow read, write: if true;
+    }
+
     // Admin authorization collection
     match /admins/{adminId} {
       allow read: if isSignedIn() && (request.auth.uid == adminId || isOwner());
-      allow write: if false; // Privileged server-side deployment only
+      allow write: if false;
     }
 
     // Visitor profile and threads
@@ -49,12 +54,13 @@ service cloud.firestore {
 
       allow update: if isOwner() || (
         isVisitor(visitorId) &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['lastActiveAt', 'unreadCount'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['lastActiveAt', 'unreadCount', 'isArchived'])
       );
 
       // Private visitor message subcollection
       match /messages/{messageId} {
         allow read: if isOwner() || isVisitor(visitorId);
+        allow list: if isOwner() || isVisitor(visitorId);
 
         allow create: if (
           isVisitor(visitorId) &&
@@ -83,7 +89,6 @@ service cloud.firestore {
       allow read: if isOwner() || isVisitor(visitorId);
       allow write: if isOwner() || isVisitor(visitorId);
     }
-
 
     function isValidVisitor(data) {
       return data.keys().hasAll(['id', 'displayName', 'normalizedName', 'publicId']) &&
