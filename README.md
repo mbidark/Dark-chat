@@ -106,26 +106,12 @@ When accessing `owner.html` or `index.html`, credentials can either be passed vi
 - **Public Visitor URL**: `https://mbidark.github.io/darkchat/`
 - **Owner Dashboard URL**: `https://mbidark.github.io/darkchat/owner.html`
 
-### Steps to Deploy to GitHub Pages:
-1. Initialize Git and commit all root-level files:
-   ```bash
-   git init
-   git add .
-   git commit -m "feat: complete DARKCHAT zero-to-production implementation"
-   git remote add origin https://github.com/mbidark/darkchat.git
-   git branch -M main
-   ```
-2. Build the production bundle:
-   ```bash
-   npm run build
-   ```
-   *Note: `vite.config.ts` uses relative paths (`base: './'`), guaranteeing zero broken asset paths on any subpath or custom domain!*
-3. Deploy to `gh-pages` branch:
-   ```bash
-   # Using git subtree or gh-pages package
-   npx gh-pages -d dist
-   ```
-4. In GitHub repository settings -> **Pages** -> Source: `Deploy from a branch` -> Branch: `gh-pages` / `/root`.
+### Deploy with GitHub Actions
+1. Push the project to the `main` branch on GitHub.
+2. In repository **Settings -> Pages**, set the build and deployment source to **GitHub Actions**.
+3. The included workflow installs the locked dependencies, builds the Vite production bundle, and deploys `dist`. Check the **Actions** tab for deployment status and the published URL.
+
+The build uses relative asset paths, so it works under the `/darkchat/` project URL as well as a custom domain. GitHub Pages is static hosting: Firebase-backed chat and authentication can run there, but the owner IP inspection/blocking controls require server API endpoints and are unavailable on Pages alone.
 
 ---
 
