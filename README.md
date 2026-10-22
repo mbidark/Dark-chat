@@ -83,7 +83,7 @@
 3. In the Firestore collection browser, create an `admins` collection:
    - Collection ID: `admins`
    - Document ID: `<PASTE_YOUR_OWNER_UID_HERE>`
-  - Document fields: `{ "role": "owner", "email": "mbidark.owner@darkchat.internal" }`
+  - Document fields: `{ "role": "owner", "email": "ooismailforajioo@gmail.com" }`
   - The owner password login only succeeds when this document exists for the authenticated Firebase user's exact UID.
 
 ### 4. Deploy Security Rules
