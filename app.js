@@ -271,18 +271,22 @@ async function handlePasswordInput(rawPassword) {
 
   appendLine(`> ●●●●●●●●`);
 
+  let result;
   try {
-    const result = await verifyOwnerPassword(rawPassword);
-    if (result && result.success) {
-      await typeLine(`Access granted.`, 'success-line', 8);
-      setTimeout(() => {
-        window.location.href = './owner.html';
-      }, 500);
-      return;
-    }
-  } catch (err) {}
+    result = await verifyOwnerPassword(rawPassword);
+  } catch (error) {
+    result = { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
 
-  appendLine(`Access denied.`, 'error-line');
+  if (result?.success) {
+    await typeLine(`Access granted.`, 'success-line', 8);
+    setTimeout(() => {
+      window.location.href = './owner.html';
+    }, 500);
+    return;
+  }
+
+  appendLine(`[ERROR] ${escapeHtml(result?.error || 'Access denied.')}`, 'error-line');
   await typeLine(`what's your name?`, 'system-line', 8);
   currentState = STATE_NAME_PROMPT;
   promptPrefix.textContent = `~ $ `;
