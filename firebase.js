@@ -85,23 +85,21 @@ export function handleFirestoreError(error, operationType, path) {
  * Authenticates visitor anonymously using authoritative Firebase Auth UID
  */
 export async function authenticateVisitor() {
-  if (auth) {
-    try {
-      if (auth.currentUser) {
-        return auth.currentUser;
-      }
-      const userCred = await signInAnonymously(auth);
-      return userCred.user;
-    } catch (error) {
-      console.warn('Anonymous auth restricted or unavailable, using local persistent ID fallback:', error.message);
-    }
+  if (!auth) {
+    throw new Error('Firebase Authentication is unavailable. Check the Firebase configuration.');
   }
-  let localUid = localStorage.getItem('darkchat_local_uid');
-  if (!localUid) {
-    localUid = 'anon_' + Math.random().toString(36).substring(2, 10) + '_' + Date.now().toString(36);
-    localStorage.setItem('darkchat_local_uid', localUid);
+
+  if (auth.currentUser) {
+    return auth.currentUser;
   }
-  return { uid: localUid, isAnonymous: true };
+
+  try {
+    const userCred = await signInAnonymously(auth);
+    return userCred.user;
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(`Firebase anonymous sign-in failed: ${detail}. Enable Anonymous sign-in and authorize this domain in Firebase Authentication.`);
+  }
 }
 
 /**
