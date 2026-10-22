@@ -103,15 +103,15 @@ When accessing `owner.html` or `index.html`, credentials can either be passed vi
 ## ✿ GitHub Pages Deployment
 
 ### Target URLs:
-- **Public Visitor URL**: `https://mbidark.github.io/darkchat/`
-- **Owner Dashboard URL**: `https://mbidark.github.io/darkchat/owner.html`
+- **Public Visitor URL**: `https://mbidark.github.io/Dark-chat/`
+- **Owner Dashboard URL**: `https://mbidark.github.io/Dark-chat/owner.html`
 
 ### Deploy with GitHub Actions
 1. Push the project to the `main` branch on GitHub.
 2. In repository **Settings -> Pages**, set the build and deployment source to **GitHub Actions**.
 3. The included workflow installs the locked dependencies, builds the Vite production bundle, and deploys `dist`. Check the **Actions** tab for deployment status and the published URL.
 
-The build uses relative asset paths, so it works under the `/darkchat/` project URL as well as a custom domain. GitHub Pages is static hosting: Firebase-backed chat and authentication can run there, but the owner IP inspection/blocking controls require server API endpoints and are unavailable on Pages alone.
+The build uses relative asset paths, so it works under the `/Dark-chat/` project URL as well as a custom domain. GitHub Pages is static hosting: Firebase-backed chat and authentication can run there, but the owner IP inspection/blocking controls require server API endpoints and are unavailable on Pages alone.
 
 ---
 
