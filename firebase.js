@@ -106,33 +106,35 @@ export async function authenticateVisitor() {
  * Securely verifies Owner password against Firebase Auth
  */
 export async function verifyOwnerPassword(password) {
-  if (!auth || typeof password !== 'string' || !password) {
-    return { success: false, error: 'Access denied.' };
+  if (!auth || !db || !firebaseConfig.ownerEmail || typeof password !== 'string' || !password) {
+    return { success: false, error: 'Firebase owner sign-in is not configured.' };
   }
 
   try {
-    // Attempt Firebase Email/Password sign-in for owner
-    const userCred = await signInWithEmailAndPassword(auth, 'mbidark.owner@darkchat.internal', password);
-    const ownerObj = { uid: userCred.user.uid, email: userCred.user.email, role: 'owner' };
-    sessionStorage.setItem('darkchat_owner_session', JSON.stringify(ownerObj));
-    return { success: true, user: ownerObj };
-  } catch (err) {
-    // Fallback cryptographic check or master UID check
-    const encoder = new TextEncoder();
-    const data = encoder.encode(password);
-    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-    const hashArray = Array.from(new Uint8Array(hashBuffer));
-    const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-
-    // SHA-256 hash for "Dark_Host.02"
-    if (hashHex === '46c4e79efe0216a19c6c803705d989b010dbd246f411a4315f880dcb1cfe4394') {
-      const ownerObj = { uid: 'owner_master_uid', email: 'mbidark.owner@darkchat.internal', role: 'owner' };
-      sessionStorage.setItem('darkchat_owner_session', JSON.stringify(ownerObj));
-      return { success: true, user: ownerObj };
+    const userCred = await signInWithEmailAndPassword(auth, firebaseConfig.ownerEmail, password);
+    const adminSnapshot = await getDoc(doc(db, 'admins', userCred.user.uid));
+    if (!adminSnapshot.exists() || adminSnapshot.data().role !== 'owner') {
+      const uid = userCred.user.uid;
+      await signOut(auth);
+      return {
+        success: false,
+        error: `This account is not registered as an owner. Create admins/${uid} in Firestore with role set to owner.`
+      };
     }
-  }
 
-  return { success: false, error: 'Access denied.' };
+    const ownerObj = { uid: userCred.user.uid, email: userCred.user.email, role: 'owner' };
+    return { success: true, user: ownerObj };
+  } catch (error) {
+    const code = error && typeof error === 'object' && 'code' in error ? error.code : '';
+    if (code === 'permission-denied') {
+      return {
+        success: false,
+        error: 'Firestore denied owner verification. Deploy firestore.rules and check that your admins document has role set to owner.'
+      };
+    }
+    const detail = error instanceof Error ? error.message : String(error);
+    return { success: false, error: `Firebase sign-in failed${code ? ` (${code})` : ''}: ${detail}` };
+  }
 }
 
 /**
@@ -166,7 +168,7 @@ export async function upsertVisitorProfile(visitor) {
 /**
  * Listens for all active visitors (Owner inbox)
  */
-export function subscribeToVisitors(callback) {
+export function subscribeToVisitors(callback, onError = () => {}) {
   if (!db) return () => {};
 
   const path = 'visitors';
@@ -183,7 +185,8 @@ export function subscribeToVisitors(callback) {
       });
       callback(visitors);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      console.error('Firestore visitor list error:', error);
+      onError(error);
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);

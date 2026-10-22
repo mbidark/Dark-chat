@@ -483,7 +483,6 @@ function setupEventListeners() {
   });
 
   logoutBtn.addEventListener('click', () => {
-    sessionStorage.removeItem('darkchat_owner_session');
     loginModal.style.display = 'flex';
   });
 
@@ -519,24 +518,18 @@ function initializeOwnerStream() {
         activeGroup = updatedGroup;
       }
     }
+  }, (error) => {
+    const message = error?.code === 'permission-denied'
+      ? 'OWNER ACCESS DENIED. Check the admins document UID and deploy firestore.rules.'
+      : `VISITOR LIST FAILED: ${error?.message || 'Unknown error'}`;
+    inboxList.innerHTML = `<li class="term-line error-line" style="padding: 12px 14px;">${escapeHtml(message)}</li>`;
   });
 }
 
 function initOwner() {
   setupEventListeners();
   syncOwnerInputDisplay();
-
-  const savedOwner = sessionStorage.getItem('darkchat_owner_session');
-  if (savedOwner) {
-    try {
-      currentOwner = JSON.parse(savedOwner);
-      if (currentOwner) {
-        initializeOwnerStream();
-        return;
-      }
-    } catch (e) {}
-  }
-
+  currentOwner = null;
   loginModal.style.display = 'flex';
   ownerPasswordInput.focus();
 }

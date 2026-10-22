@@ -74,7 +74,7 @@
 1. In Firebase Console, navigate to **Build** -> **Authentication** -> **Sign-in method**.
 2. Enable **Anonymous** authentication (for visitors).
 3. Enable **Email/Password** authentication (for Owner).
-4. In the **Users** tab, click **Add user** and create the Owner account (e.g., `admin@darkchat.local` with a strong password).
+4. In the **Users** tab, click **Add user** and create the Owner account using the email in `firebase-applet-config.json` (`ownerEmail`) and a strong password.
 5. Copy the generated Owner **UID**.
 
 ### 3. Provision Cloud Firestore
@@ -83,7 +83,8 @@
 3. In the Firestore collection browser, create an `admins` collection:
    - Collection ID: `admins`
    - Document ID: `<PASTE_YOUR_OWNER_UID_HERE>`
-   - Document fields: `{ "role": "owner", "email": "your_email@domain.com" }`
+  - Document fields: `{ "role": "owner", "email": "mbidark.owner@darkchat.internal" }`
+  - The owner password login only succeeds when this document exists for the authenticated Firebase user's exact UID.
 
 ### 4. Deploy Security Rules
 In your local project directory:
@@ -92,7 +93,7 @@ In your local project directory:
 npx firebase login
 
 # Deploy rules
-npx firebase deploy --only firestore:rules,storage
+npx firebase deploy --only firestore:rules,storage --project dark-chat-ff61d
 ```
 
 ### 5. Configure Custom Credentials in Browser

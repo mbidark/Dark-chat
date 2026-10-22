@@ -11,10 +11,9 @@ service cloud.firestore {
     }
 
     function isOwner() {
-      return isSignedIn() && (
-        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) ||
-        request.auth.uid == 'owner_master_uid'
-      );
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/admins/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/admins/$(request.auth.uid)).data.role == 'owner';
     }
 
     function isVisitor(visitorId) {
