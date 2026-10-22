@@ -165,6 +165,27 @@ export async function upsertVisitorProfile(visitor) {
   }
 }
 
+export async function setVisitorBlocked(visitorId, isBlocked) {
+  if (!db) throw new Error('Firestore is unavailable.');
+
+  try {
+    await updateDoc(doc(db, 'visitors', visitorId), {
+      isBlocked,
+      blockedAt: isBlocked ? serverTimestamp() : null
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.UPDATE, `visitors/${visitorId}`);
+  }
+}
+
+export function subscribeToVisitorProfile(visitorId, callback, onError = () => {}) {
+  if (!db) return () => {};
+
+  return onSnapshot(doc(db, 'visitors', visitorId), (snapshot) => {
+    callback(snapshot.exists() ? { id: snapshot.id, ...snapshot.data() } : null);
+  }, onError);
+}
+
 /**
  * Listens for all active visitors (Owner inbox)
  */
@@ -247,7 +268,7 @@ export async function sendMessage(msg) {
 /**
  * Listens for messages in a visitor's private subcollection
  */
-export function subscribeToMessages(visitorId, callback) {
+export function subscribeToMessages(visitorId, callback, onError = () => {}) {
   if (!db) return () => {};
 
   const path = `visitors/${visitorId}/messages`;
@@ -263,7 +284,8 @@ export function subscribeToMessages(visitorId, callback) {
       });
       callback(msgs);
     }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, path);
+      console.error('Firestore message subscription error:', error);
+      onError(error);
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.LIST, path);
@@ -308,7 +330,7 @@ export async function setTypingStatus(visitorId, sender, isTyping) {
 /**
  * Listens to typing status
  */
-export function subscribeToTypingStatus(visitorId, callback) {
+export function subscribeToTypingStatus(visitorId, callback, onError = () => {}) {
   if (!db) return () => {};
   const path = `states/${visitorId}`;
   try {
@@ -317,7 +339,8 @@ export function subscribeToTypingStatus(visitorId, callback) {
         callback(snap.data());
       }
     }, (error) => {
-      handleFirestoreError(error, OperationType.GET, path);
+      console.error('Firestore typing subscription error:', error);
+      onError(error);
     });
   } catch (error) {
     return () => {};

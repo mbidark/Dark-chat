@@ -19,6 +19,7 @@ import {
   upsertVisitorProfile,
   sendMessage,
   subscribeToMessages,
+  subscribeToVisitorProfile,
   subscribeToTypingStatus,
   setTypingStatus,
   verifyOwnerPassword
@@ -42,13 +43,16 @@ const STATE_LOADING = 'LOADING';
 const STATE_NAME_PROMPT = 'NAME_PROMPT';
 const STATE_PASSWORD = 'PASSWORD';
 const STATE_CHAT = 'CHAT';
+const STATE_BLOCKED = 'BLOCKED';
 
 let currentState = STATE_INIT;
 let currentVisitor = null;
 let messageUnsubscribe = null;
 let typingUnsubscribe = null;
+let visitorProfileUnsubscribe = null;
 let typingTimeout = null;
 let isSending = false;
+let currentVisitorBlocked = false;
 const renderedMessageIds = new Set();
 
 // Command history buffer
@@ -140,7 +144,7 @@ function syncInputDisplay() {
 }
 
 function focusTerminal() {
-  if (currentState !== STATE_LOADING && termInput) {
+  if (currentState !== STATE_LOADING && currentState !== STATE_BLOCKED && termInput) {
     termInput.focus();
   }
 }
@@ -219,6 +223,8 @@ function setupInputListeners() {
 }
 
 async function handleInputSubmission() {
+  if (currentState === STATE_BLOCKED) return;
+
   const value = termInput.value;
   if (value && value.trim() && currentState !== STATE_PASSWORD) {
     commandHistory.push(value);
@@ -348,6 +354,35 @@ function startChatSubscriptions(visitorId) {
   if (messageUnsubscribe) messageUnsubscribe();
   if (typingUnsubscribe) typingUnsubscribe();
 
+  if (!visitorProfileUnsubscribe) {
+    visitorProfileUnsubscribe = subscribeToVisitorProfile(visitorId, (profile) => {
+      const isBlocked = profile?.isBlocked === true;
+      if (isBlocked === currentVisitorBlocked) return;
+
+      currentVisitorBlocked = isBlocked;
+      if (isBlocked) {
+        currentState = STATE_BLOCKED;
+        termInput.disabled = true;
+        termInput.value = '';
+        syncInputDisplay();
+        if (connStatus) connStatus.textContent = '[BLOCKED]';
+        appendLine(`[ACCOUNT BLOCKED] Contact the owner if you think this is a mistake.`, 'error-line');
+        if (typingUnsubscribe) typingUnsubscribe();
+        typingUnsubscribe = null;
+      } else if (currentState === STATE_BLOCKED) {
+        currentState = STATE_CHAT;
+        termInput.disabled = false;
+        if (connStatus) connStatus.textContent = '[CONNECTED]';
+        appendLine(`[ACCOUNT RESTORED] You can chat again.`, 'success-line');
+        startChatSubscriptions(visitorId);
+      }
+    }, (error) => {
+      appendLine(`[ERROR] Account status unavailable: ${error.message}`, 'error-line');
+    });
+  }
+
+  if (currentVisitorBlocked) return;
+
   messageUnsubscribe = subscribeToMessages(visitorId, (messages) => {
     for (const msg of messages) {
       if (renderedMessageIds.has(msg.id)) continue;
@@ -365,6 +400,10 @@ function startChatSubscriptions(visitorId) {
 
       appendLine(lineHtml);
     }
+  }, (error) => {
+    if (!currentVisitorBlocked) {
+      appendLine(`[ERROR] Chat access unavailable: ${error.message}`, 'error-line');
+    }
   });
 
   typingUnsubscribe = subscribeToTypingStatus(visitorId, (status) => {
@@ -376,11 +415,15 @@ function startChatSubscriptions(visitorId) {
       typingIndicator.innerHTML = '';
     }
     scrollToBottom();
+  }, (error) => {
+    if (!currentVisitorBlocked) {
+      appendLine(`[ERROR] Typing status unavailable: ${error.message}`, 'error-line');
+    }
   });
 }
 
 async function handleChatMessage(rawText) {
-  if (isSending) return;
+  if (isSending || currentState !== STATE_CHAT || currentVisitorBlocked) return;
   const validation = validateMessage(rawText);
   if (!validation.valid) {
     appendLine(`[ERROR] ${validation.error}`, 'error-line');

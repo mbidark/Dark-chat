@@ -20,7 +20,7 @@
           </button>
           <div class="owner-action-bar" style="flex-wrap: wrap; gap: 4px;">
             <button id="refreshInboxBtn" class="term-btn">SYNC</button>
-            <button id="ipBlockModalBtn" class="term-btn danger">IP BLOCKS</button>
+            <button id="visitorAccessBtn" class="term-btn danger">BLOCKED USERS</button>
           </div>
         </div>
 
@@ -47,6 +47,7 @@
             <select id="recipientSelect" class="recipient-selector" aria-label="Select Message Recipient">
               <option value="ALL">ALL USERS (BROADCAST)</option>
             </select>
+            <button id="blockUserBtn" class="term-btn danger" disabled>BLOCK USER</button>
             <span id="activeGroupInfo" class="term-meta" style="font-size: 11px;">[SELECT A GROUP]</span>
           </div>
           <div id="ownerTypingIndicator" class="term-typing-indicator" style="display: none; font-size: 11px;"></div>
@@ -95,21 +96,20 @@
       </div>
     </div>
 
-    <!-- IP Block Management Modal -->
-    <div id="ipModal" class="term-modal-backdrop" style="display: none;">
-      <div class="term-modal" style="max-width: 520px;">
-        <div class="term-modal-title">✿ OWNER IP RESTRICTION MANAGEMENT</div>
-        <div class="term-line system-line" style="font-size: 11px; margin-bottom: 6px;">Manage blocked connecting IP addresses:</div>
-        <div id="blockedIpList" style="max-height: 180px; overflow-y: auto; border: 1px dashed var(--term-border); padding: 8px; margin-bottom: 8px; font-size: 11px;">
-          [Loading blocked IPs...]
-        </div>
-        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
-          <input type="text" id="targetIpInput" class="term-modal-input" placeholder="Enter IP address (e.g. 192.168.1.50)" style="flex: 1;" />
-          <button id="blockIpActionBtn" class="term-btn danger">BLOCK IP</button>
-        </div>
-        <div id="ipModalMessage" class="term-line" style="font-size: 11px; display: none;"></div>
+    <div id="visitorAccessModal" class="term-modal-backdrop" style="display: none;">
+      <div class="term-modal visitor-access-modal">
+        <div class="term-modal-title">✿ VISITOR ACCESS CONTROL</div>
+        <section class="visitor-access-section">
+          <h2>VISITOR IDS</h2>
+          <ul id="availableVisitorList" class="visitor-access-list"></ul>
+        </section>
+        <section class="visitor-access-section">
+          <h2>BLOCKED USERS</h2>
+          <ul id="blockedVisitorList" class="visitor-access-list"></ul>
+        </section>
+        <div id="visitorAccessMessage" class="term-line" style="font-size: 11px; display: none;"></div>
         <div class="term-modal-actions" style="margin-top: 12px;">
-          <button id="closeIpModalBtn" class="term-btn">CLOSE</button>
+          <button id="closeVisitorAccessBtn" class="term-btn">CLOSE</button>
         </div>
       </div>
     </div>

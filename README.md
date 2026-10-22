@@ -58,6 +58,7 @@
 | **Typing Indicator** | Restrained animated block effect: `OWNER TYPING ▰ ▰ ▰` | ✅ Tested & Verified |
 | **Cryptographic Invitations** | Secure tokens, URL builder, single-use validation, bypasses name prompt | ✅ Tested & Verified |
 | **Brand Panel Toggle** | Clicking `✿ "Mʙɪ Dᴀʀᴋ"` collapses or expands inbox sidebar | ✅ Tested & Verified |
+| **Visitor Blocking** | Owner blocks visitors by ID, reviews the blocked list, and restores access; Firestore rules enforce blocked status | ✅ Implemented |
 | **Security Rules** | Visitors can only read/write their own private thread; Owner access verified | ✅ Production-ready |
 
 ---
@@ -112,7 +113,7 @@ When accessing `owner.html` or `index.html`, credentials can either be passed vi
 2. In repository **Settings -> Pages**, set the build and deployment source to **GitHub Actions**.
 3. The included workflow installs the locked dependencies, builds the Vite production bundle, and deploys `dist`. Check the **Actions** tab for deployment status and the published URL.
 
-The build uses relative asset paths, so it works under the `/Dark-chat/` project URL as well as a custom domain. GitHub Pages is static hosting: Firebase-backed chat and authentication can run there, but the owner IP inspection/blocking controls require server API endpoints and are unavailable on Pages alone.
+The build uses relative asset paths, so it works under the `/Dark-chat/` project URL as well as a custom domain. GitHub Pages is static hosting; the owner visitor-ID block controls use Firestore and do not require a server API. IP inspection/blocking is not supported.
 
 ---
 

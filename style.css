@@ -401,6 +401,11 @@ html, body {
   text-shadow: none;
 }
 
+.term-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .term-btn.danger {
   border-color: var(--term-red);
   color: var(--term-red);
@@ -482,6 +487,11 @@ html, body {
   border: 1px solid rgba(0, 255, 102, 0.2);
 }
 
+.visitor-chip.blocked {
+  color: var(--term-red);
+  border-color: var(--term-red);
+}
+
 .sidebar-footer {
   padding: 12px 14px;
   border-top: 1px dashed var(--term-border);
@@ -558,6 +568,50 @@ html, body {
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.visitor-access-modal {
+  max-width: 640px;
+  max-height: calc(100dvh - 32px);
+  overflow-y: auto;
+}
+
+.visitor-access-section h2 {
+  margin: 0 0 6px;
+  color: var(--term-green-dim);
+  font: inherit;
+  font-size: 11px;
+}
+
+.visitor-access-list {
+  max-height: 24dvh;
+  overflow-y: auto;
+  margin: 0;
+  padding: 0;
+  border: 1px dashed var(--term-border);
+  list-style: none;
+}
+
+.visitor-access-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px;
+  border-bottom: 1px solid rgba(0, 255, 102, 0.12);
+}
+
+.visitor-access-details {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.visitor-access-details small {
+  color: var(--term-green-dim);
 }
 
 .term-modal-title {

@@ -18,7 +18,8 @@ import {
   sendMessage,
   markVisitorMessagesAsRead,
   setTypingStatus,
-  subscribeToTypingStatus
+  subscribeToTypingStatus,
+  setVisitorBlocked
 } from './firebase.js';
 
 // DOM Elements
@@ -38,15 +39,13 @@ const ownerInputRow = document.getElementById('ownerInputRow');
 const ownerTypingIndicator = document.getElementById('ownerTypingIndicator');
 const refreshInboxBtn = document.getElementById('refreshInboxBtn');
 const logoutBtn = document.getElementById('logoutBtn');
-
-// IP Modal Elements
-const ipBlockModalBtn = document.getElementById('ipBlockModalBtn');
-const ipModal = document.getElementById('ipModal');
-const blockedIpList = document.getElementById('blockedIpList');
-const targetIpInput = document.getElementById('targetIpInput');
-const blockIpActionBtn = document.getElementById('blockIpActionBtn');
-const ipModalMessage = document.getElementById('ipModalMessage');
-const closeIpModalBtn = document.getElementById('closeIpModalBtn');
+const blockUserBtn = document.getElementById('blockUserBtn');
+const visitorAccessBtn = document.getElementById('visitorAccessBtn');
+const visitorAccessModal = document.getElementById('visitorAccessModal');
+const availableVisitorList = document.getElementById('availableVisitorList');
+const blockedVisitorList = document.getElementById('blockedVisitorList');
+const visitorAccessMessage = document.getElementById('visitorAccessMessage');
+const closeVisitorAccessBtn = document.getElementById('closeVisitorAccessBtn');
 
 // Auth Modals
 const loginModal = document.getElementById('loginModal');
@@ -136,13 +135,14 @@ function updateOwnerPromptPrefix() {
   } else {
     const v = activeGroup.visitors.find(vis => vis.id === selectedRecipient);
     const label = v ? v.publicId : selectedRecipient;
-    ownerPromptPrefix.textContent = `~ (Dark -> [${label}]) $ `;
+    ownerPromptPrefix.textContent = `~ (Dark -> [${label}${v?.isBlocked ? ' BLOCKED' : ''}]) $ `;
   }
 }
 
 function renderInbox() {
   groupedInbox = groupVisitorsByName(allVisitors);
   inboxList.innerHTML = '';
+  blockUserBtn.disabled = !activeGroup;
 
   if (groupedInbox.length === 0) {
     inboxList.innerHTML = `
@@ -150,6 +150,7 @@ function renderInbox() {
         [NO ACTIVE VISITOR THREADS]
       </li>
     `;
+    renderVisitorAccessLists();
     return;
   }
 
@@ -164,7 +165,7 @@ function renderInbox() {
     const userCount = group.visitors.length > 1 ? `[${group.visitors.length} users]` : `[1 user]`;
 
     const chipsHtml = group.visitors.map(v => 
-      `<span class="visitor-chip">${escapeHtml(v.publicId || 'ID')}</span>`
+      `<span class="visitor-chip${v.isBlocked ? ' blocked' : ''}">${escapeHtml(v.publicId || 'ID')}${v.isBlocked ? ' [BLOCKED]' : ''}</span>`
     ).join(' ');
 
     li.innerHTML = `
@@ -186,6 +187,7 @@ function renderInbox() {
 
     inboxList.appendChild(li);
   }
+  renderVisitorAccessLists();
 }
 
 async function selectGroup(group) {
@@ -198,24 +200,11 @@ async function selectGroup(group) {
   for (const v of group.visitors) {
     const opt = document.createElement('option');
     opt.value = v.id;
-    opt.textContent = `[${v.publicId}] ${v.displayName}`;
+    opt.textContent = `[${v.publicId}] ${v.displayName}${v.isBlocked ? ' [BLOCKED]' : ''}`;
+    opt.disabled = Boolean(v.isBlocked);
     recipientSelect.appendChild(opt);
   }
   updateOwnerPromptPrefix();
-
-  // Fetch and display IP for the first visitor in the group (or selected recipient)
-  if (group.visitors.length > 0) {
-    const primaryVisitor = group.visitors[0];
-    try {
-      const res = await fetch(`/api/ip/visitor/${primaryVisitor.id}`);
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ip) {
-          activeGroupInfo.textContent = `GROUP: ${group.displayName.toUpperCase()} | IP: ${data.ip}`;
-        }
-      }
-    } catch (e) {}
-  }
 
   transcriptUnsubscribers.forEach(unsub => unsub());
   transcriptUnsubscribers = [];
@@ -310,8 +299,13 @@ async function handleOwnerMessageSubmission() {
   const targetRecipient = recipientSelect.value;
 
   if (targetRecipient === 'ALL') {
+    const recipients = activeGroup.visitors.filter(visitor => !visitor.isBlocked);
+    if (recipients.length === 0) {
+      appendTranscriptLine(`[ERROR] There are no unblocked users in this group.`, 'error-line');
+      return;
+    }
     const broadcastId = 'bcast_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
-    for (const visitor of activeGroup.visitors) {
+    for (const visitor of recipients) {
       await sendMessage({
         visitorId: visitor.id,
         publicId: visitor.publicId,
@@ -328,6 +322,10 @@ async function handleOwnerMessageSubmission() {
       appendTranscriptLine(`[ERROR] Recipient visitor not found.`, 'error-line');
       return;
     }
+    if (visitor.isBlocked) {
+      appendTranscriptLine(`[ERROR] This visitor is blocked. Unblock them before replying.`, 'error-line');
+      return;
+    }
     await sendMessage({
       visitorId: visitor.id,
       publicId: visitor.publicId,
@@ -342,80 +340,75 @@ async function handleOwnerMessageSubmission() {
   scrollOwnerToBottom();
 }
 
-async function loadBlockedIpList() {
-  blockedIpList.innerHTML = `<span class="term-line system-line">[Loading blocked IPs...]</span>`;
-  try {
-    const res = await fetch('/api/ip/list');
-    if (res.ok) {
-      const data = await res.json();
-      if (data && Array.isArray(data.blockedIps)) {
-        if (data.blockedIps.length === 0) {
-          blockedIpList.innerHTML = `<span class="term-line system-line">No IP addresses currently blocked.</span>`;
-          return;
-        }
-        blockedIpList.innerHTML = data.blockedIps.map(ip => `
-          <div style="display: flex; justify-content: space-between; align-items: center; padding: 4px 0; border-bottom: 1px solid rgba(0,255,102,0.1);">
-            <span>${escapeHtml(ip)}</span>
-            <button class="term-btn unblock-ip-btn" data-ip="${escapeHtml(ip)}" style="font-size: 10px; padding: 2px 6px;">UNBLOCK</button>
-          </div>
-        `).join('');
+function visitorAccessRow(visitor, action, label) {
+  return `
+    <li class="visitor-access-row">
+      <div class="visitor-access-details">
+        <strong><span class="term-public-id">[${escapeHtml(visitor.publicId || 'ID')}]</span> ${escapeHtml(visitor.displayName || 'Unknown visitor')}</strong>
+        <small>UID: ${escapeHtml(visitor.id)}</small>
+      </div>
+      <button class="term-btn${action === 'block' ? ' danger' : ''}" data-visitor-action="${action}" data-visitor-id="${escapeHtml(visitor.id)}">${label}</button>
+    </li>
+  `;
+}
 
-        document.querySelectorAll('.unblock-ip-btn').forEach(btn => {
-          btn.addEventListener('click', async (e) => {
-            const ipToUnblock = e.target.getAttribute('data-ip');
-            await unblockIpAddress(ipToUnblock);
-          });
-        });
+function renderVisitorAccessLists() {
+  const availableVisitors = allVisitors.filter(visitor => !visitor.isBlocked);
+  const blockedVisitors = allVisitors.filter(visitor => visitor.isBlocked);
+
+  availableVisitorList.innerHTML = availableVisitors.length
+    ? availableVisitors.map(visitor => visitorAccessRow(visitor, 'block', 'BLOCK')).join('')
+    : '<li class="term-line system-line">[NO AVAILABLE VISITORS]</li>';
+  blockedVisitorList.innerHTML = blockedVisitors.length
+    ? blockedVisitors.map(visitor => visitorAccessRow(visitor, 'unblock', 'UNBLOCK')).join('')
+    : '<li class="term-line system-line">[NO BLOCKED USERS]</li>';
+}
+
+function openVisitorAccess() {
+  renderVisitorAccessLists();
+  visitorAccessMessage.style.display = 'none';
+  visitorAccessModal.style.display = 'flex';
+}
+
+async function handleVisitorAccessAction(event) {
+  const button = event.target.closest('[data-visitor-action]');
+  if (!button) return;
+
+  const visitor = allVisitors.find(item => item.id === button.dataset.visitorId);
+  if (!visitor) return;
+
+  const shouldBlock = button.dataset.visitorAction === 'block';
+  button.disabled = true;
+  try {
+    await setVisitorBlocked(visitor.id, shouldBlock);
+    allVisitors = allVisitors.map(item => item.id === visitor.id ? { ...item, isBlocked: shouldBlock } : item);
+    if (activeGroup) {
+      activeGroup = {
+        ...activeGroup,
+        visitors: activeGroup.visitors.map(item => item.id === visitor.id ? { ...item, isBlocked: shouldBlock } : item)
+      };
+      const selectedRecipient = recipientSelect.value;
+      recipientSelect.innerHTML = '<option value="ALL">ALL USERS (BROADCAST TO GROUP)</option>';
+      for (const item of activeGroup.visitors) {
+        const option = document.createElement('option');
+        option.value = item.id;
+        option.textContent = `[${item.publicId}] ${item.displayName}${item.isBlocked ? ' [BLOCKED]' : ''}`;
+        option.disabled = Boolean(item.isBlocked);
+        recipientSelect.appendChild(option);
       }
+      if (activeGroup.visitors.some(item => item.id === selectedRecipient && !item.isBlocked)) {
+        recipientSelect.value = selectedRecipient;
+      }
+      updateOwnerPromptPrefix();
     }
-  } catch (err) {
-    blockedIpList.innerHTML = `<span class="term-line error-line">[Failed to load blocked IPs]</span>`;
+    renderInbox();
+    visitorAccessMessage.textContent = `${visitor.publicId || visitor.id} ${shouldBlock ? 'blocked' : 'unblocked'}.`;
+    visitorAccessMessage.className = 'term-line success-line';
+  } catch (error) {
+    visitorAccessMessage.textContent = error instanceof Error ? error.message : String(error);
+    visitorAccessMessage.className = 'term-line error-line';
   }
-}
-
-async function blockIpAddress(ip) {
-  if (!ip) return;
-  try {
-    const res = await fetch('/api/ip/block', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ip })
-    });
-    const data = await res.json();
-    if (data.success) {
-      ipModalMessage.textContent = data.message;
-      ipModalMessage.className = 'term-line success-line';
-      ipModalMessage.style.display = 'block';
-      targetIpInput.value = '';
-      loadBlockedIpList();
-    } else {
-      ipModalMessage.textContent = data.error || 'Failed to block IP.';
-      ipModalMessage.className = 'term-line error-line';
-      ipModalMessage.style.display = 'block';
-    }
-  } catch (err) {
-    ipModalMessage.textContent = 'Network error blocking IP.';
-    ipModalMessage.className = 'term-line error-line';
-    ipModalMessage.style.display = 'block';
-  }
-}
-
-async function unblockIpAddress(ip) {
-  if (!ip) return;
-  try {
-    const res = await fetch('/api/ip/unblock', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ip })
-    });
-    const data = await res.json();
-    if (data.success) {
-      ipModalMessage.textContent = data.message;
-      ipModalMessage.className = 'term-line success-line';
-      ipModalMessage.style.display = 'block';
-      loadBlockedIpList();
-    }
-  } catch (err) {}
+  visitorAccessMessage.style.display = 'block';
 }
 
 function toggleSidebar() {
@@ -463,24 +456,16 @@ function setupEventListeners() {
     renderInbox();
   });
 
-  ipBlockModalBtn.addEventListener('click', () => {
-    ipModal.style.display = 'flex';
-    ipModalMessage.style.display = 'none';
-    loadBlockedIpList();
+  visitorAccessBtn.addEventListener('click', openVisitorAccess);
+  blockUserBtn.addEventListener('click', openVisitorAccess);
+  closeVisitorAccessBtn.addEventListener('click', () => {
+    visitorAccessModal.style.display = 'none';
   });
-
-  closeIpModalBtn.addEventListener('click', () => {
-    ipModal.style.display = 'none';
+  visitorAccessModal.addEventListener('click', event => {
+    if (event.target === visitorAccessModal) visitorAccessModal.style.display = 'none';
   });
-
-  blockIpActionBtn.addEventListener('click', () => {
-    const ip = targetIpInput.value.trim();
-    if (ip) {
-      if (window.confirm(`Are you sure you want to block IP address: ${ip}?`)) {
-        blockIpAddress(ip);
-      }
-    }
-  });
+  availableVisitorList.addEventListener('click', handleVisitorAccessAction);
+  blockedVisitorList.addEventListener('click', handleVisitorAccessAction);
 
   logoutBtn.addEventListener('click', () => {
     loginModal.style.display = 'flex';
@@ -516,6 +501,10 @@ function initializeOwnerStream() {
       const updatedGroup = groupedInbox.find(g => g.normalizedName === activeGroup.normalizedName);
       if (updatedGroup) {
         activeGroup = updatedGroup;
+        blockUserBtn.disabled = false;
+      } else {
+        activeGroup = null;
+        blockUserBtn.disabled = true;
       }
     }
   }, (error) => {

@@ -20,6 +20,11 @@ service cloud.firestore {
       return isSignedIn() && request.auth.uid == visitorId;
     }
 
+    function isUnblockedVisitor(visitorId) {
+      return isVisitor(visitorId) &&
+        get(/databases/$(database)/documents/visitors/$(visitorId)).data.get('isBlocked', false) == false;
+    }
+
     function isValidId(id) {
       return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
     }
@@ -52,17 +57,17 @@ service cloud.firestore {
         isValidVisitor(incoming());
 
       allow update: if isOwner() || (
-        isVisitor(visitorId) &&
+        isUnblockedVisitor(visitorId) &&
         incoming().diff(existing()).affectedKeys().hasOnly(['lastActiveAt', 'unreadCount', 'isArchived'])
       );
 
       // Private visitor message subcollection
       match /messages/{messageId} {
-        allow read: if isOwner() || isVisitor(visitorId);
-        allow list: if isOwner() || isVisitor(visitorId);
+        allow read: if isOwner() || isUnblockedVisitor(visitorId);
+        allow list: if isOwner() || isUnblockedVisitor(visitorId);
 
         allow create: if (
-          isVisitor(visitorId) &&
+          isUnblockedVisitor(visitorId) &&
           incoming().sender == 'visitor' &&
           incoming().visitorId == visitorId &&
           incoming().text is string &&
@@ -76,7 +81,7 @@ service cloud.firestore {
           incoming().text.size() <= 1000
         );
 
-        allow update: if (isOwner() || isVisitor(visitorId)) &&
+        allow update: if (isOwner() || isUnblockedVisitor(visitorId)) &&
           incoming().diff(existing()).affectedKeys().hasOnly(['read']);
 
         allow delete: if isOwner();
@@ -85,8 +90,10 @@ service cloud.firestore {
 
     // Typing heartbeat state
     match /states/{visitorId} {
-      allow read: if isOwner() || isVisitor(visitorId);
-      allow write: if isOwner() || isVisitor(visitorId);
+      allow read: if isOwner() || isUnblockedVisitor(visitorId);
+      allow write: if isOwner() || (
+        isUnblockedVisitor(visitorId)
+      );
     }
 
     function isValidVisitor(data) {
