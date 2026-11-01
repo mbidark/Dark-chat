@@ -58,6 +58,7 @@ let visitorProfileUnsubscribe = null;
 let typingTimeout = null;
 let isSending = false;
 let currentVisitorBlocked = false;
+let ownerPasswordPending = false;
 const renderedMessageIds = new Set();
 
 // Command history buffer
@@ -257,6 +258,7 @@ async function handleNameInput(rawName) {
   if (isOwnerName(trimmed)) {
     await typeLine(`Password:`, 'system-line', 8);
     currentState = STATE_PASSWORD;
+    ownerPasswordPending = true;
     promptPrefix.textContent = `> `;
     syncInputDisplay();
     focusTerminal();
@@ -281,6 +283,28 @@ async function handlePasswordInput(rawPassword) {
   if (!rawPassword) return;
 
   appendLine(`> ●●●●●●●●`);
+
+  if (ownerPasswordPending) {
+    let result;
+    try {
+      result = await verifyOwnerPassword(rawPassword);
+    } catch (error) {
+      result = { success: false, error: error instanceof Error ? error.message : String(error) };
+    }
+    ownerPasswordPending = false;
+    if (result?.success) {
+      await typeLine(`Access granted.`, 'success-line', 8);
+      setTimeout(() => { window.location.href = './owner.html'; }, 500);
+      return;
+    }
+    appendLine(`[ERROR] ${escapeHtml(result?.error || 'Access denied.')}`, 'error-line');
+    await typeLine(`what's your name?`, 'system-line', 8);
+    currentState = STATE_NAME_PROMPT;
+    promptPrefix.textContent = `~ $ `;
+    syncInputDisplay();
+    focusTerminal();
+    return;
+  }
 
   let result;
   try {
@@ -313,10 +337,19 @@ async function handlePasswordInput(rawPassword) {
     return;
   }
 
-  appendLine(`[ERROR] ${escapeHtml(result?.error || 'Access denied.')}`, 'error-line');
-  await typeLine(`Enter your D.s access password.`, 'system-line', 8);
-  currentState = STATE_PASSWORD;
-  promptPrefix.textContent = `> `;
+  const trimmedPassword = rawPassword.trim();
+  if (/^D\./i.test(trimmedPassword)) {
+    appendLine(`[ERROR] ${escapeHtml(result?.error === 'INVALID_REAL_ACCOUNT_FORMAT' ? 'Invalid account login format. Use D.<code><password>.' : result?.error || 'Account not found.')}`, 'error-line');
+    await typeLine(`what's your name?`, 'system-line', 8);
+    currentState = STATE_NAME_PROMPT;
+    promptPrefix.textContent = `~ $ `;
+    syncInputDisplay();
+    focusTerminal();
+  } else if (result?.error === 'INVALID_REAL_ACCOUNT_FORMAT') {
+    await handleNameInput(trimmedPassword);
+  } else {
+    await handleNameInput(trimmedPassword);
+  }
   syncInputDisplay();
   focusTerminal();
 }
@@ -478,7 +511,7 @@ async function startFastLoading() {
   if (prefersReducedMotion) {
     terminalLines.innerHTML = `
       <div class="term-line system-line">Initializing...</div>
-      <div class="term-line system-line">Enter your D.s access password.</div>
+      <div class="term-line system-line">Enter your D.&lt;code&gt;&lt;password&gt; password.</div>
     `;
     currentState = STATE_PASSWORD;
     promptPrefix.textContent = `> `;
@@ -527,7 +560,7 @@ async function startFastLoading() {
   await new Promise(r => setTimeout(r, 200));
 
   terminalLines.innerHTML = '';
-  await typeLine(`Enter your D.s access password.`, 'system-line', 10);
+  await typeLine(`Enter your D.&lt;code&gt;&lt;password&gt; password.`, 'system-line', 10);
 
   currentState = STATE_PASSWORD;
   promptPrefix.textContent = `> `;

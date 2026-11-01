@@ -55,6 +55,13 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
+    match /userLogins/{loginHash} {
+      allow get: if isSignedIn();
+      allow list: if isOwner();
+      allow create, update: if isOwner();
+      allow delete: if isOwner();
+    }
+
     match /notificationTokens/{tokenId} {
       allow read: if isOwner();
       allow create, update: if isSignedIn() &&

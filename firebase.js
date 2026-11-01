@@ -94,24 +94,37 @@ export async function registerPushNotifications(role = 'visitor') {
 }
 
 function accountEmail(code) {
-  return `d.s${code}@darkchat.local`;
+  return `d.${code}@darkchat.local`;
 }
 
 export function validateAccessPassword(password) {
-  return /^D\.s\d{6}$/i.test(password || '');
+  return /^D\..{2,32}$/i.test(password || '');
+}
+
+async function hashLoginKey(loginKey) {
+  const bytes = new TextEncoder().encode(loginKey);
+  const digest = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
 export async function verifyVisitorPassword(password) {
   if (!auth || !db || !validateAccessPassword(password)) {
-    return { success: false, error: 'Invalid access password. Use the format D.s followed by your 6-digit code.' };
+    return { success: false, error: 'INVALID_REAL_ACCOUNT_FORMAT' };
   }
 
-  const match = password.match(/^D\.s(\d{6})$/i);
-  const code = match?.[1];
-  const normalizedPassword = `D.s${code}`;
-
   try {
-    const userCred = await signInWithEmailAndPassword(auth, accountEmail(code), normalizedPassword);
+    const normalizedLogin = password.trim();
+    if (!auth.currentUser || auth.currentUser.isAnonymous) {
+      await authenticateVisitor().catch(() => null);
+    }
+    const loginHash = await hashLoginKey(normalizedLogin);
+    const loginSnapshot = await getDoc(doc(db, 'userLogins', loginHash));
+    if (!loginSnapshot.exists()) {
+      await signOut(auth).catch(() => {});
+      return { success: false, error: 'Invalid access password.' };
+    }
+    const login = loginSnapshot.data();
+    const userCred = await signInWithEmailAndPassword(auth, login.email, login.authPassword);
     const accountSnapshot = await getDoc(doc(db, 'users', userCred.user.uid));
     if (!accountSnapshot.exists()) {
       await signOut(auth);
@@ -166,31 +179,41 @@ function generateAccountPublicId(uid) {
   return uid.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase().padStart(6, '0');
 }
 
-export async function createRealVisitorAccount(displayName, code) {
+export async function createRealVisitorAccount(displayName, code, password) {
   if (!auth || !db) throw new Error('Firebase is unavailable.');
   const cleanName = String(displayName || '').trim().replace(/\s+/g, ' ');
   if (cleanName.length < 2 || cleanName.length > 32) {
     throw new Error('Name must contain 2 to 32 characters.');
   }
-  if (!/^\d{6}$/.test(code || '')) {
-    throw new Error('Account code must contain exactly 6 digits.');
+  const cleanCode = String(code || '').trim();
+  const cleanPassword = String(password || '').trim();
+  if (!/^[a-zA-Z0-9_-]{1,16}$/.test(cleanCode)) {
+    throw new Error('Code must contain 1 to 16 letters, numbers, underscores, or hyphens.');
+  }
+  if (!/^[a-zA-Z0-9_-]{1,16}$/.test(cleanPassword)) {
+    throw new Error('Password must contain 1 to 16 letters, numbers, underscores, or hyphens.');
   }
 
-  const password = `D.s${code}`;
+  const loginKey = `D.${cleanCode}${cleanPassword}`;
+  const loginHash = await hashLoginKey(loginKey);
+  const email = `d.${loginHash.slice(0, 32)}@darkchat.local`;
+  const authPassword = `DARKCHAT_${loginHash}`;
   let secondaryApp;
   try {
     secondaryApp = initializeApp(firebaseConfig, `visitor-account-${Date.now()}`);
     const secondaryAuth = getAuth(secondaryApp);
-    const credential = await createUserWithEmailAndPassword(secondaryAuth, accountEmail(code), password);
+    const credential = await createUserWithEmailAndPassword(secondaryAuth, email, authPassword);
     const uid = credential.user.uid;
     const publicId = generateAccountPublicId(uid);
     const normalizedName = cleanName.toLowerCase();
 
     await setDoc(doc(db, 'users', uid), {
-      code,
-      email: accountEmail(code),
+      code: cleanCode,
+      password: cleanPassword,
+      email,
       displayName: cleanName,
       normalizedName,
+      accountType: 'real',
       publicId,
       isDisabled: false,
       isBlocked: false,
@@ -206,10 +229,19 @@ export async function createRealVisitorAccount(displayName, code) {
       serverUpdatedAt: serverTimestamp(),
       isArchived: false,
       isBlocked: false,
+      accountType: 'real',
       unreadCount: 0
     });
+    await setDoc(doc(db, 'userLogins', loginHash), {
+      uid,
+      email,
+      authPassword,
+      code: cleanCode,
+      displayName: cleanName,
+      isBlocked: false
+    });
     await signOut(secondaryAuth);
-    return { uid, publicId, displayName: cleanName, code, password };
+    return { uid, publicId, displayName: cleanName, code: cleanCode, password: cleanPassword, loginKey };
   } finally {
     if (secondaryApp?.delete) {
       try { await secondaryApp.delete(); } catch (_) {}

@@ -468,6 +468,11 @@ html, body {
   font-weight: bold;
 }
 
+.inbox-name.real-user-name {
+  color: #ffffff;
+  text-shadow: 0 0 4px rgba(255, 255, 255, 0.35);
+}
+
 .inbox-user-count {
   font-size: 11px;
   color: var(--term-green-dim);

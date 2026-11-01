@@ -54,6 +54,7 @@ const createAccountBtn = document.getElementById('createAccountBtn');
 const createAccountModal = document.getElementById('createAccountModal');
 const accountNameInput = document.getElementById('accountNameInput');
 const accountCodeInput = document.getElementById('accountCodeInput');
+const accountPasswordInput = document.getElementById('accountPasswordInput');
 const createAccountMessage = document.getElementById('createAccountMessage');
 const closeCreateAccountBtn = document.getElementById('closeCreateAccountBtn');
 const createAccountSubmitBtn = document.getElementById('createAccountSubmitBtn');
@@ -174,6 +175,7 @@ function renderInbox() {
 
     const unreadDot = group.hasUnread ? '<span class="unread-dot"></span>' : '';
     const userCount = group.visitors.length > 1 ? `[${group.visitors.length} users]` : `[1 user]`;
+    const isRealUserGroup = group.visitors.some(visitor => visitor.accountType === 'real');
 
     const chipsHtml = group.visitors.map(v => 
       `<span class="visitor-chip${v.isBlocked ? ' blocked' : ''}">${escapeHtml(v.publicId || 'ID')}${v.isBlocked ? ' [BLOCKED]' : ''}</span>`
@@ -183,7 +185,7 @@ function renderInbox() {
       <div class="inbox-item-header">
         <div class="inbox-title-group">
           ${unreadDot}
-          <span class="inbox-name">${escapeHtml(group.displayName)}</span>
+          <span class="inbox-name${isRealUserGroup ? ' real-user-name' : ''}">${escapeHtml(group.displayName)}</span>
         </div>
         <span class="inbox-user-count">${userCount}</span>
       </div>
@@ -355,7 +357,7 @@ function visitorAccessRow(visitor, action, label) {
   return `
     <li class="visitor-access-row">
       <div class="visitor-access-details">
-        <strong><span class="term-public-id">[${escapeHtml(visitor.publicId || 'ID')}]</span> ${escapeHtml(visitor.displayName || 'Unknown visitor')}</strong>
+        <strong class="${visitor.accountType === 'real' ? 'real-user-name' : ''}"><span class="term-public-id">[${escapeHtml(visitor.publicId || 'ID')}]</span> ${escapeHtml(visitor.displayName || 'Unknown visitor')}</strong>
         <small>UID: ${escapeHtml(visitor.id)}</small>
       </div>
       <button class="term-btn${action === 'block' ? ' danger' : ''}" data-visitor-action="${action}" data-visitor-id="${escapeHtml(visitor.id)}">${label}</button>
@@ -487,6 +489,7 @@ function setupEventListeners() {
   createAccountBtn.addEventListener('click', () => {
     accountNameInput.value = '';
     accountCodeInput.value = '';
+    accountPasswordInput.value = '';
     createAccountMessage.style.display = 'none';
     createAccountModal.style.display = 'flex';
     accountNameInput.focus();
@@ -500,9 +503,9 @@ function setupEventListeners() {
   createAccountSubmitBtn.addEventListener('click', async () => {
     createAccountSubmitBtn.disabled = true;
     try {
-      const account = await createRealVisitorAccount(accountNameInput.value, accountCodeInput.value);
+      const account = await createRealVisitorAccount(accountNameInput.value, accountCodeInput.value, accountPasswordInput.value);
       createAccountMessage.className = 'term-line success-line';
-      createAccountMessage.innerHTML = `Created ${escapeHtml(account.displayName)}. User ID: <strong>${escapeHtml(account.code)}</strong><br>Password: <strong>${escapeHtml(account.password)}</strong>`;
+      createAccountMessage.innerHTML = `Created ${escapeHtml(account.displayName)}.<br>Login: <strong>${escapeHtml(account.loginKey)}</strong>`;
     } catch (error) {
       createAccountMessage.className = 'term-line error-line';
       createAccountMessage.textContent = error instanceof Error ? error.message : String(error);
