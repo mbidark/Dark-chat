@@ -81,6 +81,7 @@ service cloud.firestore {
     match /visitors/{visitorId} {
       allow get: if isOwner() || isVisitor(visitorId);
       allow list: if isOwner();
+      allow delete: if isOwner();
 
       allow create: if isOwner() || (isSignedIn() && request.auth.uid == visitorId &&
         isValidVisitor(incoming()));

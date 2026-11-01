@@ -21,6 +21,8 @@ import {
   getDocFromServer,
   updateDoc,
   addDoc,
+  deleteDoc,
+  getDocs,
   onSnapshot,
   query,
   orderBy,
@@ -434,6 +436,42 @@ export async function setVisitorBlocked(visitorId, isBlocked) {
     });
   } catch (error) {
     handleFirestoreError(error, OperationType.UPDATE, `visitors/${visitorId}`);
+  }
+}
+
+export async function deleteVisitorChat(visitorId) {
+  if (!db) throw new Error('Firestore is unavailable.');
+  try {
+    const messagesRef = collection(db, 'visitors', visitorId, 'messages');
+    const snapshot = await getDocs(messagesRef);
+    await Promise.all(snapshot.docs.map(messageDoc => deleteDoc(messageDoc.ref)));
+    await updateDoc(doc(db, 'visitors', visitorId), {
+      unreadCount: 0,
+      lastActiveAt: new Date().toISOString(),
+      serverUpdatedAt: serverTimestamp()
+    });
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `visitors/${visitorId}/messages`);
+  }
+}
+
+export async function deleteVisitorUser(visitorId, accountType = 'visitor') {
+  if (!db) throw new Error('Firestore is unavailable.');
+  try {
+    await deleteVisitorChat(visitorId);
+
+    if (accountType === 'real') {
+      const loginSnapshot = await getDocs(query(collection(db, 'userLogins'), where('uid', '==', visitorId)));
+      await Promise.all(loginSnapshot.docs.map(loginDoc => deleteDoc(loginDoc.ref)));
+      await deleteDoc(doc(db, 'users', visitorId));
+    }
+
+    const tokenSnapshot = await getDocs(query(collection(db, 'notificationTokens'), where('uid', '==', visitorId)));
+    await Promise.all(tokenSnapshot.docs.map(tokenDoc => deleteDoc(tokenDoc.ref)));
+    await deleteDoc(doc(db, 'states', visitorId)).catch(() => {});
+    await deleteDoc(doc(db, 'visitors', visitorId));
+  } catch (error) {
+    handleFirestoreError(error, OperationType.DELETE, `visitors/${visitorId}`);
   }
 }
 

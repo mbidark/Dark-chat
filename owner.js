@@ -20,6 +20,8 @@ import {
   setTypingStatus,
   subscribeToTypingStatus,
   setVisitorBlocked,
+  deleteVisitorChat,
+  deleteVisitorUser,
   createRealVisitorAccount,
   logoutUser,
   registerPushNotifications,
@@ -45,6 +47,8 @@ const ownerTypingIndicator = document.getElementById('ownerTypingIndicator');
 const refreshInboxBtn = document.getElementById('refreshInboxBtn');
 const logoutBtn = document.getElementById('logoutBtn');
 const blockUserBtn = document.getElementById('blockUserBtn');
+const deleteChatBtn = document.getElementById('deleteChatBtn');
+const deleteUserBtn = document.getElementById('deleteUserBtn');
 const visitorAccessBtn = document.getElementById('visitorAccessBtn');
 const visitorAccessModal = document.getElementById('visitorAccessModal');
 const availableVisitorList = document.getElementById('availableVisitorList');
@@ -158,6 +162,8 @@ function renderInbox() {
   groupedInbox = groupVisitorsByName(allVisitors);
   inboxList.innerHTML = '';
   blockUserBtn.disabled = !activeGroup;
+  deleteChatBtn.disabled = !activeGroup;
+  deleteUserBtn.disabled = !activeGroup;
 
   if (groupedInbox.length === 0) {
     inboxList.innerHTML = `
@@ -494,6 +500,49 @@ function setupEventListeners() {
 
   visitorAccessBtn.addEventListener('click', openVisitorAccess);
   blockUserBtn.addEventListener('click', openVisitorAccess);
+  deleteChatBtn.addEventListener('click', async () => {
+    if (!activeGroup) return;
+    const targetIds = recipientSelect.value === 'ALL'
+      ? activeGroup.visitors.map(visitor => visitor.id)
+      : activeGroup.visitors
+        .filter(visitor => visitor.id === recipientSelect.value)
+        .map(visitor => visitor.id);
+    if (!targetIds.length) return;
+    if (!window.confirm(`Delete chat history for ${targetIds.length} selected user${targetIds.length === 1 ? '' : 's'}?`)) return;
+    deleteChatBtn.disabled = true;
+    try {
+      for (const visitorId of targetIds) await deleteVisitorChat(visitorId);
+      appendTranscriptLine(`[SUCCESS] Deleted selected chat history.`, 'success-line');
+    } catch (error) {
+      appendTranscriptLine(`[ERROR] ${error instanceof Error ? error.message : String(error)}`, 'error-line');
+    } finally {
+      deleteChatBtn.disabled = false;
+    }
+  });
+  deleteUserBtn.addEventListener('click', async () => {
+    if (!activeGroup) return;
+    const targetIds = recipientSelect.value === 'ALL'
+      ? activeGroup.visitors.map(visitor => visitor.id)
+      : activeGroup.visitors
+        .filter(visitor => visitor.id === recipientSelect.value)
+        .map(visitor => visitor.id);
+    if (!targetIds.length) return;
+    if (!window.confirm(`PERMANENTLY delete ${targetIds.length} selected user${targetIds.length === 1 ? '' : 's'} and all chat history?`)) return;
+    deleteUserBtn.disabled = true;
+    try {
+      for (const visitorId of targetIds) {
+        const visitor = activeGroup.visitors.find(item => item.id === visitorId);
+        await deleteVisitorUser(visitorId, visitor?.accountType || 'visitor');
+      }
+      activeGroup = null;
+      appendTranscriptLine(`[SUCCESS] Deleted selected user records.`, 'success-line');
+      renderInbox();
+    } catch (error) {
+      appendTranscriptLine(`[ERROR] ${error instanceof Error ? error.message : String(error)}`, 'error-line');
+    } finally {
+      deleteUserBtn.disabled = false;
+    }
+  });
   closeVisitorAccessBtn.addEventListener('click', () => {
     visitorAccessModal.style.display = 'none';
   });
