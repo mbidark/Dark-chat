@@ -75,7 +75,103 @@ export function subscribeToGlobalSessionRevision(callback, onError = () => {}) {
   }, onError);
 }
 
+export async function registerOneSignalNotifications(role = 'visitor') {
+  const appId = import.meta.env?.VITE_ONESIGNAL_APP_ID
+    || 'b43f8432-a924-4c49-a4c0-7799fdc514fd';
+  if (!appId) {
+    return { success: false, error: 'OneSignal App ID is not configured.' };
+  }
+  if (!('Notification' in window)) {
+    return { success: false, error: 'This browser does not support push notifications.' };
+  }
+
+  try {
+    if (!window.OneSignal) {
+      await new Promise((resolve, reject) => {
+        const existing = document.querySelector('script[data-onesignal-sdk]');
+        if (existing) {
+          existing.addEventListener('load', resolve, { once: true });
+          existing.addEventListener('error', reject, { once: true });
+          return;
+        }
+        const script = document.createElement('script');
+        script.src = 'https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js';
+        script.defer = true;
+        script.dataset.onesignalSdk = 'true';
+        script.onload = resolve;
+        script.onerror = () => reject(new Error('OneSignal SDK failed to load.'));
+        document.head.appendChild(script);
+      });
+    }
+
+    await new Promise((resolve, reject) => {
+      window.OneSignalDeferred = window.OneSignalDeferred || [];
+      window.OneSignalDeferred.push(async OneSignal => {
+        try {
+          const projectPath = window.location.pathname.includes('/Dark-chat/')
+            ? '/Dark-chat/'
+            : '/';
+          await OneSignal.init({
+            appId,
+            allowLocalhostAsSecureOrigin: true,
+            serviceWorkerParam: { scope: projectPath },
+            serviceWorkerPath: `${projectPath}OneSignalSDKWorker.js`
+          });
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+
+    await window.OneSignal.User.PushSubscription.optIn();
+    if (auth?.currentUser) {
+      await window.OneSignal.login(auth.currentUser.uid);
+      await window.OneSignal.User.addTag('darkchat_role', role);
+      await window.OneSignal.User.addTag('darkchat_uid', auth.currentUser.uid);
+    }
+
+    const optedIn = window.OneSignal.User.PushSubscription.optedIn;
+    if (!optedIn) {
+      return { success: false, error: 'Notification permission was not granted.' };
+    }
+    return { success: true, subscriptionId: window.OneSignal.User.PushSubscription.id };
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
+export async function sendOneSignalNotification({
+  externalUserId = null,
+  role = null,
+  title,
+  body,
+  url = './'
+} = {}) {
+  const workerUrl = import.meta.env?.VITE_NOTIFICATION_WORKER_URL || '';
+  if (!workerUrl) return { success: false, error: 'Notification Worker URL is not configured.' };
+  try {
+    const response = await fetch(workerUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ externalUserId, role, title, body, url })
+    });
+    const result = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(result.error || `Notification request failed (${response.status}).`);
+    return { success: true, result };
+  } catch (error) {
+    return { success: false, error: error instanceof Error ? error.message : String(error) };
+  }
+}
+
 export async function registerPushNotifications(role = 'visitor') {
+  const oneSignalResult = await registerOneSignalNotifications(role);
+  if (oneSignalResult.success) {
+    return oneSignalResult;
+  }
   if (!app || !db || !auth?.currentUser || !('Notification' in window)) {
     return { success: false, error: 'Push notifications are unavailable in this browser.' };
   }
@@ -553,6 +649,22 @@ export async function sendMessage(msg) {
     } else {
       await updateDoc(visitorRef, {
         lastActiveAt: messageData.createdAt
+      });
+    }
+
+    if (msg.sender === 'visitor') {
+      await sendOneSignalNotification({
+        role: 'owner',
+        title: `New message from ${msg.displayName || 'User'}`,
+        body: msg.text,
+        url: './owner.html'
+      });
+    } else {
+      await sendOneSignalNotification({
+        externalUserId: visitorId,
+        title: 'Dark replied',
+        body: msg.text,
+        url: './index.html'
       });
     }
   } catch (error) {
