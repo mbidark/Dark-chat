@@ -25,7 +25,8 @@ messaging.onBackgroundMessage((payload) => {
 
 self.addEventListener('notificationclick', event => {
   event.notification.close();
-  const targetUrl = event.notification.data?.url || './';
+  const requestedUrl = event.notification.data?.url || './';
+  const targetUrl = new URL(requestedUrl, self.registration.scope).href;
   event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
     for (const client of windowClients) {
       if ('focus' in client && new URL(client.url).origin === self.location.origin) {

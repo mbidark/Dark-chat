@@ -107,7 +107,7 @@ export async function registerPushNotifications(role = 'visitor') {
         const title = payload.notification?.title || 'DARKCHAT';
         const body = payload.notification?.body || '';
         if (Notification.permission === 'granted') {
-          new Notification(title, { body, icon: './favicon.ico' });
+          new Notification(title, { body, icon: './icon.svg' });
         }
       });
       return { success: true, token };

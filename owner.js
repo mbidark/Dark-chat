@@ -60,6 +60,7 @@ const createAccountMessage = document.getElementById('createAccountMessage');
 const closeCreateAccountBtn = document.getElementById('closeCreateAccountBtn');
 const createAccountSubmitBtn = document.getElementById('createAccountSubmitBtn');
 const logoutEveryoneBtn = document.getElementById('logoutEveryoneBtn');
+const notificationEnableBtn = document.getElementById('notificationEnableBtn');
 
 // Auth Modals
 const loginModal = document.getElementById('loginModal');
@@ -445,6 +446,15 @@ function openCreateAccountModal() {
 }
 
 function setupEventListeners() {
+  notificationEnableBtn.addEventListener('click', async () => {
+    const result = await registerPushNotifications('owner');
+    if (result.success) {
+      notificationEnableBtn.textContent = 'NOTIFICATIONS ON';
+      appendTranscriptLine(`[SUCCESS] Owner notifications enabled.`, 'success-line');
+    } else {
+      appendTranscriptLine(`[ERROR] ${result.error || 'Notifications unavailable.'}`, 'error-line');
+    }
+  });
   brandToggleBtn.addEventListener('click', toggleSidebar);
   if (brandMainToggleBtn) {
     brandMainToggleBtn.addEventListener('click', toggleSidebar);
