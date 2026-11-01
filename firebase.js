@@ -222,6 +222,10 @@ export async function createRealVisitorAccount(displayName, code, password) {
 
   const loginKey = `D.${cleanCode}${cleanPassword}`;
   const loginHash = await hashLoginKey(loginKey);
+  const existingLogin = await getDoc(doc(db, 'userLogins', loginHash));
+  if (existingLogin.exists()) {
+    throw new Error('That code and password combination is already in use.');
+  }
   const email = `d.${loginHash.slice(0, 32)}@darkchat.local`;
   const authPassword = `DARKCHAT_${loginHash}`;
   let secondaryApp;

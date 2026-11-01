@@ -528,6 +528,14 @@ function setupEventListeners() {
     createAccountMessage.style.display = 'block';
     createAccountSubmitBtn.disabled = false;
   });
+  [accountNameInput, accountCodeInput, accountPasswordInput].forEach(input => {
+    input.addEventListener('keydown', event => {
+      if (event.key === 'Enter') {
+        event.preventDefault();
+        createAccountSubmitBtn.click();
+      }
+    });
+  });
 
   ownerLoginBtn.addEventListener('click', async () => {
     const pass = ownerPasswordInput.value;
