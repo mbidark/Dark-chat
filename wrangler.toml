@@ -1,0 +1,3 @@
+name = "darkchat-notifications"
+main = "public/onesignal-notification-worker.js"
+compatibility_date = "2026-11-01"

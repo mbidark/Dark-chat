@@ -37,6 +37,9 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Build site
         run: bun run build
+        env:
+          VITE_ONESIGNAL_APP_ID: ${{ vars.VITE_ONESIGNAL_APP_ID }}
+          VITE_NOTIFICATION_WORKER_URL: ${{ vars.VITE_NOTIFICATION_WORKER_URL }}
       - name: Setup Pages
         uses: actions/configure-pages@v5
       - name: Upload artifact

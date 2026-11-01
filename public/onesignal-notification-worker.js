@@ -22,7 +22,9 @@ export default {
         app_id: env.ONESIGNAL_APP_ID,
         headings: { en: payload.title || 'DARKCHAT' },
         contents: { en: payload.body || '' },
-        web_url: payload.url || './',
+        web_url: payload.url && payload.url !== './'
+          ? `https://mbidark.github.io/Dark-chat/${payload.url.replace(/^\.\/|^\/+/, '')}`
+          : 'https://mbidark.github.io/Dark-chat/',
         chrome_web_icon: 'https://mbidark.github.io/Dark-chat/icon.svg'
       };
 
