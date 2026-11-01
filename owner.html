@@ -20,6 +20,7 @@
           </button>
           <div class="owner-action-bar" style="flex-wrap: wrap; gap: 4px;">
             <button id="refreshInboxBtn" class="term-btn">SYNC</button>
+            <button id="createAccountBtn" class="term-btn">CREATE USER</button>
             <button id="visitorAccessBtn" class="term-btn danger">BLOCKED USERS</button>
           </div>
         </div>
@@ -110,6 +111,21 @@
         <div id="visitorAccessMessage" class="term-line" style="font-size: 11px; display: none;"></div>
         <div class="term-modal-actions" style="margin-top: 12px;">
           <button id="closeVisitorAccessBtn" class="term-btn">CLOSE</button>
+        </div>
+      </div>
+
+      <div id="createAccountModal" class="term-modal-backdrop" style="display: none;">
+        <div class="term-modal">
+          <div class="term-modal-title">✿ CREATE REAL USER ACCOUNT</div>
+          <div style="display: flex; flex-direction: column; gap: 8px;">
+            <input type="text" id="accountNameInput" class="term-modal-input" maxlength="32" placeholder="User name" autocomplete="off" />
+            <input type="text" id="accountCodeInput" class="term-modal-input" maxlength="6" inputmode="numeric" pattern="[0-9]{6}" placeholder="6-digit code" autocomplete="off" />
+          </div>
+          <div id="createAccountMessage" class="term-line" style="margin-top: 8px; display: none;"></div>
+          <div class="term-modal-actions" style="margin-top: 12px;">
+            <button id="closeCreateAccountBtn" class="term-btn">CLOSE</button>
+            <button id="createAccountSubmitBtn" class="term-btn">CREATE</button>
+          </div>
         </div>
       </div>
     </div>

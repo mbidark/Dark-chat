@@ -22,8 +22,13 @@ import {
   subscribeToVisitorProfile,
   subscribeToTypingStatus,
   setTypingStatus,
-  verifyOwnerPassword
+  verifyOwnerPassword,
+  verifyVisitorPassword,
+  restoreVisitorSession,
+  logoutUser,
+  registerPushNotifications
 } from './firebase.js';
+import { startInactiveLogout, hasSessionExpired } from './session-security.js';
 
 // DOM Elements
 const termOutput = document.getElementById('terminalOutput');
@@ -279,23 +284,39 @@ async function handlePasswordInput(rawPassword) {
 
   let result;
   try {
-    result = await verifyOwnerPassword(rawPassword);
+    result = await verifyVisitorPassword(rawPassword);
   } catch (error) {
     result = { success: false, error: error instanceof Error ? error.message : String(error) };
   }
 
   if (result?.success) {
     await typeLine(`Access granted.`, 'success-line', 8);
-    setTimeout(() => {
-      window.location.href = './owner.html';
-    }, 500);
+    currentVisitor = result.visitor;
+    visitorTag.textContent = `ID: ${result.visitor.publicId}`;
+    visitorTag.style.display = 'inline';
+    connStatus.textContent = '[CONNECTED]';
+    connStatus.style.display = 'inline';
+    terminalLines.innerHTML = '';
+    await typeLine(`Now you can chat with Dark...`, 'system-line', 10);
+    currentState = STATE_CHAT;
+    promptPrefix.textContent = `~ $ `;
+    syncInputDisplay();
+    startChatSubscriptions(result.visitor.id);
+    registerPushNotifications('visitor').then(result => {
+      if (!result.success && result.error) console.info('Push notification setup:', result.error);
+    });
+    startInactiveLogout(async () => {
+      await logoutUser();
+      localStorage.removeItem(`darkchat_visitor_session_${result.visitor.id}`);
+      window.location.reload();
+    });
     return;
   }
 
   appendLine(`[ERROR] ${escapeHtml(result?.error || 'Access denied.')}`, 'error-line');
-  await typeLine(`what's your name?`, 'system-line', 8);
-  currentState = STATE_NAME_PROMPT;
-  promptPrefix.textContent = `~ $ `;
+  await typeLine(`Enter your D.s access password.`, 'system-line', 8);
+  currentState = STATE_PASSWORD;
+  promptPrefix.textContent = `> `;
   syncInputDisplay();
   focusTerminal();
 }
@@ -457,10 +478,10 @@ async function startFastLoading() {
   if (prefersReducedMotion) {
     terminalLines.innerHTML = `
       <div class="term-line system-line">Initializing...</div>
-      <div class="term-line system-line">what's your name?</div>
+      <div class="term-line system-line">Enter your D.s access password.</div>
     `;
-    currentState = STATE_NAME_PROMPT;
-    promptPrefix.textContent = `~ $ `;
+    currentState = STATE_PASSWORD;
+    promptPrefix.textContent = `> `;
     syncInputDisplay();
     focusTerminal();
     return;
@@ -506,10 +527,10 @@ async function startFastLoading() {
   await new Promise(r => setTimeout(r, 200));
 
   terminalLines.innerHTML = '';
-  await typeLine(`what's your name?`, 'system-line', 10);
+  await typeLine(`Enter your D.s access password.`, 'system-line', 10);
 
-  currentState = STATE_NAME_PROMPT;
-  promptPrefix.textContent = `~ $ `;
+  currentState = STATE_PASSWORD;
+  promptPrefix.textContent = `> `;
   syncInputDisplay();
   focusTerminal();
 }
@@ -521,41 +542,35 @@ async function startTerminal() {
   setupInputListeners();
   syncInputDisplay();
   focusTerminal();
-
+  if (hasSessionExpired()) {
+    localStorage.removeItem('darkchat_last_activity');
+    await logoutUser();
+  }
+  await new Promise(resolve => setTimeout(resolve, 250));
+  let restoredVisitor = null;
   try {
-    const authUser = await authenticateVisitor();
-    const visitorId = authUser.uid;
-
-    const savedSessionRaw = localStorage.getItem(`darkchat_visitor_session_${visitorId}`);
-    if (savedSessionRaw) {
-      try {
-        const saved = JSON.parse(savedSessionRaw);
-        if (saved && saved.id === visitorId && saved.displayName) {
-          currentVisitor = saved;
-          terminalLines.innerHTML = '';
-          appendLine(`Now you can chat with Dark...`, 'system-line');
-
-          if (connStatus) {
-            connStatus.textContent = '[CONNECTED]';
-            connStatus.style.display = 'inline';
-          }
-          if (visitorTag) {
-            visitorTag.textContent = `ID: ${saved.publicId}`;
-            visitorTag.style.display = 'inline';
-          }
-
-          currentState = STATE_CHAT;
-          promptPrefix.textContent = `~ $ `;
-          syncInputDisplay();
-
-          startChatSubscriptions(visitorId);
-          focusTerminal();
-          return;
-        }
-      } catch (e) {}
-    }
-  } catch (e) {}
-
+    restoredVisitor = await restoreVisitorSession();
+  } catch (_) {}
+  if (restoredVisitor) {
+    currentVisitor = restoredVisitor;
+    terminalLines.innerHTML = '';
+    visitorTag.textContent = `ID: ${restoredVisitor.publicId}`;
+    visitorTag.style.display = 'inline';
+    connStatus.textContent = '[CONNECTED]';
+    connStatus.style.display = 'inline';
+    appendLine(`Now you can chat with Dark...`, 'system-line');
+    currentState = STATE_CHAT;
+    promptPrefix.textContent = `~ $ `;
+    syncInputDisplay();
+    startChatSubscriptions(restoredVisitor.id);
+    registerPushNotifications('visitor');
+    startInactiveLogout(async () => {
+      await logoutUser();
+      localStorage.removeItem('darkchat_last_activity');
+      window.location.reload();
+    });
+    return;
+  }
   await startFastLoading();
 }
 

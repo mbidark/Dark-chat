@@ -19,8 +19,12 @@ import {
   markVisitorMessagesAsRead,
   setTypingStatus,
   subscribeToTypingStatus,
-  setVisitorBlocked
+  setVisitorBlocked,
+  createRealVisitorAccount,
+  logoutUser,
+  registerPushNotifications
 } from './firebase.js';
+import { startInactiveLogout, hasSessionExpired } from './session-security.js';
 
 // DOM Elements
 const ownerSidebar = document.getElementById('ownerSidebar');
@@ -46,6 +50,13 @@ const availableVisitorList = document.getElementById('availableVisitorList');
 const blockedVisitorList = document.getElementById('blockedVisitorList');
 const visitorAccessMessage = document.getElementById('visitorAccessMessage');
 const closeVisitorAccessBtn = document.getElementById('closeVisitorAccessBtn');
+const createAccountBtn = document.getElementById('createAccountBtn');
+const createAccountModal = document.getElementById('createAccountModal');
+const accountNameInput = document.getElementById('accountNameInput');
+const accountCodeInput = document.getElementById('accountCodeInput');
+const createAccountMessage = document.getElementById('createAccountMessage');
+const closeCreateAccountBtn = document.getElementById('closeCreateAccountBtn');
+const createAccountSubmitBtn = document.getElementById('createAccountSubmitBtn');
 
 // Auth Modals
 const loginModal = document.getElementById('loginModal');
@@ -468,8 +479,36 @@ function setupEventListeners() {
   availableVisitorList.addEventListener('click', handleVisitorAccessAction);
   blockedVisitorList.addEventListener('click', handleVisitorAccessAction);
 
-  logoutBtn.addEventListener('click', () => {
+  logoutBtn.addEventListener('click', async () => {
+    await logoutUser();
     loginModal.style.display = 'flex';
+  });
+
+  createAccountBtn.addEventListener('click', () => {
+    accountNameInput.value = '';
+    accountCodeInput.value = '';
+    createAccountMessage.style.display = 'none';
+    createAccountModal.style.display = 'flex';
+    accountNameInput.focus();
+  });
+  closeCreateAccountBtn.addEventListener('click', () => {
+    createAccountModal.style.display = 'none';
+  });
+  createAccountModal.addEventListener('click', event => {
+    if (event.target === createAccountModal) createAccountModal.style.display = 'none';
+  });
+  createAccountSubmitBtn.addEventListener('click', async () => {
+    createAccountSubmitBtn.disabled = true;
+    try {
+      const account = await createRealVisitorAccount(accountNameInput.value, accountCodeInput.value);
+      createAccountMessage.className = 'term-line success-line';
+      createAccountMessage.innerHTML = `Created ${escapeHtml(account.displayName)}. User ID: <strong>${escapeHtml(account.code)}</strong><br>Password: <strong>${escapeHtml(account.password)}</strong>`;
+    } catch (error) {
+      createAccountMessage.className = 'term-line error-line';
+      createAccountMessage.textContent = error instanceof Error ? error.message : String(error);
+    }
+    createAccountMessage.style.display = 'block';
+    createAccountSubmitBtn.disabled = false;
   });
 
   ownerLoginBtn.addEventListener('click', async () => {
@@ -481,6 +520,11 @@ function setupEventListeners() {
       currentOwner = res.user;
       loginModal.style.display = 'none';
       initializeOwnerStream();
+      registerPushNotifications('owner');
+      startInactiveLogout(async () => {
+        await logoutUser();
+        window.location.reload();
+      });
     } else {
       loginError.textContent = res.error || 'Access denied.';
       loginError.style.display = 'block';

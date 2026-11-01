@@ -8,6 +8,7 @@ import {
   getAuth,
   signInAnonymously,
   signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
   signOut,
   onAuthStateChanged
 } from 'firebase/auth';
@@ -26,6 +27,7 @@ import {
   where,
   serverTimestamp
 } from 'firebase/firestore';
+import { getMessaging, getToken, onMessage, isSupported } from 'firebase/messaging';
 
 import firebaseConfig from './firebase-applet-config.json';
 
@@ -38,6 +40,182 @@ try {
 
 export const db = app ? getFirestore(app, firebaseConfig.firestoreDatabaseId) : null;
 export const auth = app ? getAuth(app) : null;
+
+export async function logoutUser() {
+  if (auth?.currentUser) {
+    await signOut(auth);
+  }
+}
+
+export async function registerPushNotifications(role = 'visitor') {
+  if (!app || !db || !auth?.currentUser || !('Notification' in window)) {
+    return { success: false, error: 'Push notifications are unavailable in this browser.' };
+  }
+  if (!firebaseConfig.vapidKey) {
+    return { success: false, error: 'Firebase VAPID key is not configured yet.' };
+  }
+  try {
+    if (!(await isSupported())) {
+      return { success: false, error: 'This browser does not support Firebase Web Push.' };
+    }
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      return { success: false, error: 'Notification permission was not granted.' };
+    }
+    if ('serviceWorker' in navigator) {
+      await navigator.serviceWorker.register('./firebase-messaging-sw.js');
+      const registration = await navigator.serviceWorker.ready;
+      const messaging = getMessaging(app);
+      const token = await getToken(messaging, {
+        vapidKey: firebaseConfig.vapidKey,
+        serviceWorkerRegistration: registration
+      });
+      await setDoc(doc(db, 'notificationTokens', token), {
+        uid: auth.currentUser.uid,
+        role,
+        token,
+        lastSeenAt: serverTimestamp(),
+        userAgent: navigator.userAgent.slice(0, 240)
+      });
+      onMessage(messaging, payload => {
+        const title = payload.notification?.title || 'DARKCHAT';
+        const body = payload.notification?.body || '';
+        if (Notification.permission === 'granted') {
+          new Notification(title, { body, icon: './favicon.ico' });
+        }
+      });
+      return { success: true, token };
+    }
+    return { success: false, error: 'Service workers are unavailable.' };
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    return { success: false, error: detail };
+  }
+}
+
+function accountEmail(code) {
+  return `d.s${code}@darkchat.local`;
+}
+
+export function validateAccessPassword(password) {
+  return /^D\.s\d{6}$/i.test(password || '');
+}
+
+export async function verifyVisitorPassword(password) {
+  if (!auth || !db || !validateAccessPassword(password)) {
+    return { success: false, error: 'Invalid access password. Use the format D.s followed by your 6-digit code.' };
+  }
+
+  const match = password.match(/^D\.s(\d{6})$/i);
+  const code = match?.[1];
+  const normalizedPassword = `D.s${code}`;
+
+  try {
+    const userCred = await signInWithEmailAndPassword(auth, accountEmail(code), normalizedPassword);
+    const accountSnapshot = await getDoc(doc(db, 'users', userCred.user.uid));
+    if (!accountSnapshot.exists()) {
+      await signOut(auth);
+      return { success: false, error: 'This account has no visitor profile.' };
+    }
+
+    const account = accountSnapshot.data();
+    if (account.isDisabled || account.isBlocked) {
+      await signOut(auth);
+      return { success: false, error: 'This account is blocked.' };
+    }
+
+    const publicId = account.publicId || generateAccountPublicId(userCred.user.uid);
+    const visitor = {
+      id: userCred.user.uid,
+      publicId,
+      displayName: account.displayName,
+      normalizedName: account.normalizedName,
+      unreadCount: 0
+    };
+    await upsertVisitorProfile(visitor);
+    return { success: true, user: userCred.user, visitor };
+  } catch (error) {
+    const codeValue = error && typeof error === 'object' && 'code' in error ? error.code : '';
+    return {
+      success: false,
+      error: codeValue === 'auth/invalid-credential'
+        ? 'Invalid access password.'
+        : `Account sign-in failed${codeValue ? ` (${codeValue})` : ''}.`
+    };
+  }
+}
+
+export async function restoreVisitorSession() {
+  if (!auth?.currentUser || auth.currentUser.isAnonymous || !db) return null;
+  const snapshot = await getDoc(doc(db, 'users', auth.currentUser.uid));
+  if (!snapshot.exists()) return null;
+  const account = snapshot.data();
+  if (account.isDisabled || account.isBlocked) return null;
+  const visitor = {
+    id: auth.currentUser.uid,
+    publicId: account.publicId,
+    displayName: account.displayName,
+    normalizedName: account.normalizedName,
+    unreadCount: 0
+  };
+  await upsertVisitorProfile(visitor);
+  return visitor;
+}
+
+function generateAccountPublicId(uid) {
+  return uid.replace(/[^a-zA-Z0-9]/g, '').slice(-6).toUpperCase().padStart(6, '0');
+}
+
+export async function createRealVisitorAccount(displayName, code) {
+  if (!auth || !db) throw new Error('Firebase is unavailable.');
+  const cleanName = String(displayName || '').trim().replace(/\s+/g, ' ');
+  if (cleanName.length < 2 || cleanName.length > 32) {
+    throw new Error('Name must contain 2 to 32 characters.');
+  }
+  if (!/^\d{6}$/.test(code || '')) {
+    throw new Error('Account code must contain exactly 6 digits.');
+  }
+
+  const password = `D.s${code}`;
+  let secondaryApp;
+  try {
+    secondaryApp = initializeApp(firebaseConfig, `visitor-account-${Date.now()}`);
+    const secondaryAuth = getAuth(secondaryApp);
+    const credential = await createUserWithEmailAndPassword(secondaryAuth, accountEmail(code), password);
+    const uid = credential.user.uid;
+    const publicId = generateAccountPublicId(uid);
+    const normalizedName = cleanName.toLowerCase();
+
+    await setDoc(doc(db, 'users', uid), {
+      code,
+      email: accountEmail(code),
+      displayName: cleanName,
+      normalizedName,
+      publicId,
+      isDisabled: false,
+      isBlocked: false,
+      createdAt: serverTimestamp(),
+      createdBy: auth.currentUser?.uid || null
+    });
+    await setDoc(doc(db, 'visitors', uid), {
+      id: uid,
+      publicId,
+      displayName: cleanName,
+      normalizedName,
+      lastActiveAt: new Date().toISOString(),
+      serverUpdatedAt: serverTimestamp(),
+      isArchived: false,
+      isBlocked: false,
+      unreadCount: 0
+    });
+    await signOut(secondaryAuth);
+    return { uid, publicId, displayName: cleanName, code, password };
+  } finally {
+    if (secondaryApp?.delete) {
+      try { await secondaryApp.delete(); } catch (_) {}
+    }
+  }
+}
 
 // Test connection on boot
 async function testConnection() {

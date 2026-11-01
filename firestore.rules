@@ -48,13 +48,29 @@ service cloud.firestore {
       allow write: if false;
     }
 
+    match /users/{userId} {
+      allow get: if isOwner() || (isSignedIn() && request.auth.uid == userId);
+      allow list: if isOwner();
+      allow create, update: if isOwner();
+      allow delete: if isOwner();
+    }
+
+    match /notificationTokens/{tokenId} {
+      allow read: if isOwner();
+      allow create, update: if isSignedIn() &&
+        incoming().uid == request.auth.uid;
+      allow delete: if isOwner() || (
+        isSignedIn() && existing().uid == request.auth.uid
+      );
+    }
+
     // Visitor profile and threads
     match /visitors/{visitorId} {
       allow get: if isOwner() || isVisitor(visitorId);
       allow list: if isOwner();
 
-      allow create: if isSignedIn() && request.auth.uid == visitorId &&
-        isValidVisitor(incoming());
+      allow create: if isOwner() || (isSignedIn() && request.auth.uid == visitorId &&
+        isValidVisitor(incoming()));
 
       allow update: if isOwner() || (
         isUnblockedVisitor(visitorId) &&
