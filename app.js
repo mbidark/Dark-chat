@@ -26,7 +26,8 @@ import {
   verifyVisitorPassword,
   restoreVisitorSession,
   logoutUser,
-  registerPushNotifications
+  registerPushNotifications,
+  subscribeToGlobalSessionRevision
 } from './firebase.js';
 import { startInactiveLogout, hasSessionExpired } from './session-security.js';
 
@@ -41,6 +42,7 @@ const inputWrapper = document.getElementById('inputWrapper');
 const typingIndicator = document.getElementById('typingIndicator');
 const connStatus = document.getElementById('connStatus');
 const visitorTag = document.getElementById('visitorTag');
+const userLogoutBtn = document.getElementById('userLogoutBtn');
 
 // State machine
 const STATE_INIT = 'INIT';
@@ -156,6 +158,26 @@ function focusTerminal() {
 }
 
 function setupInputListeners() {
+  userLogoutBtn.addEventListener('click', async () => {
+    await logoutUser();
+    localStorage.removeItem('darkchat_last_activity');
+    for (const key of Object.keys(localStorage)) {
+      if (key.startsWith('darkchat_visitor_session_')) localStorage.removeItem(key);
+    }
+    window.location.reload();
+  });
+  subscribeToGlobalSessionRevision(forceLogout => {
+    if (forceLogout) {
+      logoutUser().finally(() => {
+        for (const key of Object.keys(localStorage)) {
+          if (key.startsWith('darkchat_visitor_session_') || key.startsWith('darkchat_public_')) {
+            localStorage.removeItem(key);
+          }
+        }
+        window.location.reload();
+      });
+    }
+  });
   ['input', 'keyup', 'keydown', 'click', 'focus', 'select'].forEach(ev => {
     termInput.addEventListener(ev, () => {
       if (currentState === STATE_LOADING) return;
@@ -253,6 +275,28 @@ async function handleNameInput(rawName) {
   if (!trimmed) return;
 
   appendLine(`~ $ ${escapeHtml(trimmed)}`);
+
+  if (/^D\./i.test(trimmed)) {
+    await typeLine(`Checking account...`, 'system-line', 8);
+    try {
+      const result = await verifyVisitorPassword(trimmed);
+      if (!result.success) {
+        appendLine(`[ERROR] ${escapeHtml(result.error || 'Invalid account login.')}`, 'error-line');
+        await typeLine(`what's your name?`, 'system-line', 8);
+        currentState = STATE_NAME_PROMPT;
+        promptPrefix.textContent = `~ $ `;
+        syncInputDisplay();
+        focusTerminal();
+        return;
+      }
+      await activateRealVisitor(result.visitor);
+    } catch (error) {
+      appendLine(`[ERROR] ${escapeHtml(error instanceof Error ? error.message : String(error))}`, 'error-line');
+      currentState = STATE_NAME_PROMPT;
+      promptPrefix.textContent = `~ $ `;
+    }
+    return;
+  }
 
   // Check Owner login
   if (isOwnerName(trimmed)) {
@@ -390,18 +434,48 @@ async function initializeVisitorSession(displayName) {
         visitorTag.textContent = `ID: ${publicId}`;
         visitorTag.style.display = 'inline';
       }
+      userLogoutBtn.style.display = 'inline-block';
 
       currentState = STATE_CHAT;
       promptPrefix.textContent = `~ $ `;
       syncInputDisplay();
 
       startChatSubscriptions(visitorId);
+      registerPushNotifications('visitor');
+      startInactiveLogout(async () => {
+        await logoutUser();
+        localStorage.removeItem('darkchat_last_activity');
+        window.location.reload();
+      });
       focusTerminal();
     }, 400);
 
   } catch (err) {
     appendLine(`[ERROR] Initialization failed: ${err.message}`, 'error-line');
   }
+}
+
+async function activateRealVisitor(visitor) {
+  await typeLine(`Access granted.`, 'success-line', 8);
+  currentVisitor = visitor;
+  visitorTag.textContent = `ID: ${visitor.publicId}`;
+  visitorTag.style.display = 'inline';
+  userLogoutBtn.style.display = 'inline-block';
+  connStatus.textContent = '[CONNECTED]';
+  connStatus.style.display = 'inline';
+  terminalLines.innerHTML = '';
+  await typeLine(`Welcome back, ${visitor.displayName}.`, 'success-line', 10);
+  await typeLine(`Now you can chat with Dark...`, 'system-line', 10);
+  currentState = STATE_CHAT;
+  promptPrefix.textContent = `~ $ `;
+  syncInputDisplay();
+  startChatSubscriptions(visitor.id);
+  registerPushNotifications('visitor');
+  startInactiveLogout(async () => {
+    await logoutUser();
+    localStorage.removeItem('darkchat_last_activity');
+    window.location.reload();
+  });
 }
 
 function startChatSubscriptions(visitorId) {
@@ -511,10 +585,10 @@ async function startFastLoading() {
   if (prefersReducedMotion) {
     terminalLines.innerHTML = `
       <div class="term-line system-line">Initializing...</div>
-      <div class="term-line system-line">Enter your D.&lt;code&gt;&lt;password&gt; password.</div>
+      <div class="term-line system-line">what's your name?</div>
     `;
-    currentState = STATE_PASSWORD;
-    promptPrefix.textContent = `> `;
+    currentState = STATE_NAME_PROMPT;
+    promptPrefix.textContent = `~ $ `;
     syncInputDisplay();
     focusTerminal();
     return;
@@ -560,10 +634,10 @@ async function startFastLoading() {
   await new Promise(r => setTimeout(r, 200));
 
   terminalLines.innerHTML = '';
-  await typeLine(`Enter your D.&lt;code&gt;&lt;password&gt; password.`, 'system-line', 10);
+  await typeLine(`what's your name?`, 'system-line', 10);
 
-  currentState = STATE_PASSWORD;
-  promptPrefix.textContent = `> `;
+  currentState = STATE_NAME_PROMPT;
+  promptPrefix.textContent = `~ $ `;
   syncInputDisplay();
   focusTerminal();
 }
@@ -578,31 +652,6 @@ async function startTerminal() {
   if (hasSessionExpired()) {
     localStorage.removeItem('darkchat_last_activity');
     await logoutUser();
-  }
-  await new Promise(resolve => setTimeout(resolve, 250));
-  let restoredVisitor = null;
-  try {
-    restoredVisitor = await restoreVisitorSession();
-  } catch (_) {}
-  if (restoredVisitor) {
-    currentVisitor = restoredVisitor;
-    terminalLines.innerHTML = '';
-    visitorTag.textContent = `ID: ${restoredVisitor.publicId}`;
-    visitorTag.style.display = 'inline';
-    connStatus.textContent = '[CONNECTED]';
-    connStatus.style.display = 'inline';
-    appendLine(`Now you can chat with Dark...`, 'system-line');
-    currentState = STATE_CHAT;
-    promptPrefix.textContent = `~ $ `;
-    syncInputDisplay();
-    startChatSubscriptions(restoredVisitor.id);
-    registerPushNotifications('visitor');
-    startInactiveLogout(async () => {
-      await logoutUser();
-      localStorage.removeItem('darkchat_last_activity');
-      window.location.reload();
-    });
-    return;
   }
   await startFastLoading();
 }

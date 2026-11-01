@@ -62,6 +62,12 @@ service cloud.firestore {
       allow delete: if isOwner();
     }
 
+    match /settings/{settingId} {
+      allow read: if isSignedIn();
+      allow create, update: if isOwner();
+      allow delete: if isOwner();
+    }
+
     match /notificationTokens/{tokenId} {
       allow read: if isOwner();
       allow create, update: if isSignedIn() &&

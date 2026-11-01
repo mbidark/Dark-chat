@@ -47,6 +47,32 @@ export async function logoutUser() {
   }
 }
 
+export async function forceLogoutAllUsers() {
+  if (!db || !auth?.currentUser) throw new Error('Owner authentication required.');
+  await setDoc(doc(db, 'settings', 'globalSession'), {
+    revision: Date.now().toString(),
+    forcedAt: serverTimestamp(),
+    forcedBy: auth.currentUser.uid
+  }, { merge: true });
+}
+
+export function subscribeToGlobalSessionRevision(callback, onError = () => {}) {
+  if (!db) return () => {};
+  const key = 'darkchat_global_session_revision';
+  const baseline = localStorage.getItem(key);
+  return onSnapshot(doc(db, 'settings', 'globalSession'), snapshot => {
+    const revision = snapshot.exists() ? String(snapshot.data().revision || '') : '';
+    if (!baseline && revision) {
+      localStorage.setItem(key, revision);
+      callback(false);
+      return;
+    }
+    if (baseline && revision && revision !== baseline) {
+      callback(true);
+    }
+  }, onError);
+}
+
 export async function registerPushNotifications(role = 'visitor') {
   if (!app || !db || !auth?.currentUser || !('Notification' in window)) {
     return { success: false, error: 'Push notifications are unavailable in this browser.' };

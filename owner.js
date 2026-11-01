@@ -22,7 +22,8 @@ import {
   setVisitorBlocked,
   createRealVisitorAccount,
   logoutUser,
-  registerPushNotifications
+  registerPushNotifications,
+  forceLogoutAllUsers
 } from './firebase.js';
 import { startInactiveLogout, hasSessionExpired } from './session-security.js';
 
@@ -58,6 +59,7 @@ const accountPasswordInput = document.getElementById('accountPasswordInput');
 const createAccountMessage = document.getElementById('createAccountMessage');
 const closeCreateAccountBtn = document.getElementById('closeCreateAccountBtn');
 const createAccountSubmitBtn = document.getElementById('createAccountSubmitBtn');
+const logoutEveryoneBtn = document.getElementById('logoutEveryoneBtn');
 
 // Auth Modals
 const loginModal = document.getElementById('loginModal');
@@ -484,6 +486,19 @@ function setupEventListeners() {
   logoutBtn.addEventListener('click', async () => {
     await logoutUser();
     loginModal.style.display = 'flex';
+  });
+
+  logoutEveryoneBtn.addEventListener('click', async () => {
+    if (!window.confirm('Log out all users from every browser?')) return;
+    logoutEveryoneBtn.disabled = true;
+    try {
+      await forceLogoutAllUsers();
+      appendTranscriptLine(`[SUCCESS] All browsers were logged out.`, 'success-line');
+    } catch (error) {
+      appendTranscriptLine(`[ERROR] ${error instanceof Error ? error.message : String(error)}`, 'error-line');
+    } finally {
+      logoutEveryoneBtn.disabled = false;
+    }
   });
 
   createAccountBtn.addEventListener('click', () => {
