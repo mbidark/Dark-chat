@@ -402,6 +402,7 @@ async function handleVisitorAccessAction(event) {
       updateOwnerPromptPrefix();
     }
     renderInbox();
+    renderVisitorAccessLists();
     visitorAccessMessage.textContent = `${visitor.publicId || visitor.id} ${shouldBlock ? 'blocked' : 'unblocked'}.`;
     visitorAccessMessage.className = 'term-line success-line';
   } catch (error) {
@@ -431,12 +432,12 @@ function setupEventListeners() {
   ownerTermInput.addEventListener('input', () => {
     if (activeGroup) {
       for (const v of activeGroup.visitors) {
-        setTypingStatus(v.id, 'owner', true);
+        if (!v.isBlocked) setTypingStatus(v.id, 'owner', true);
       }
       clearTimeout(ownerTypingTimeout);
       ownerTypingTimeout = setTimeout(() => {
         for (const v of activeGroup.visitors) {
-          setTypingStatus(v.id, 'owner', false);
+          if (!v.isBlocked) setTypingStatus(v.id, 'owner', false);
         }
       }, 2500);
     }

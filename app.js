@@ -367,6 +367,8 @@ function startChatSubscriptions(visitorId) {
         syncInputDisplay();
         if (connStatus) connStatus.textContent = '[BLOCKED]';
         appendLine(`[ACCOUNT BLOCKED] Contact the owner if you think this is a mistake.`, 'error-line');
+        if (messageUnsubscribe) messageUnsubscribe();
+        messageUnsubscribe = null;
         if (typingUnsubscribe) typingUnsubscribe();
         typingUnsubscribe = null;
       } else if (currentState === STATE_BLOCKED) {
