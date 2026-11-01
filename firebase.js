@@ -139,7 +139,10 @@ export async function verifyVisitorPassword(password) {
   }
 
   try {
-    const normalizedLogin = password.trim();
+    const trimmedLogin = password.trim();
+    const normalizedLogin = /^d\./i.test(trimmedLogin)
+      ? `D.${trimmedLogin.slice(2)}`
+      : trimmedLogin;
     if (!auth.currentUser || auth.currentUser.isAnonymous) {
       await authenticateVisitor().catch(() => null);
     }
@@ -175,11 +178,19 @@ export async function verifyVisitorPassword(password) {
     return { success: true, user: userCred.user, visitor };
   } catch (error) {
     const codeValue = error && typeof error === 'object' && 'code' in error ? error.code : '';
+    const detail = error instanceof Error ? error.message : String(error || '');
+    const friendlyError = codeValue === 'permission-denied'
+      ? 'Account lookup denied. Firestore rules are not deployed.'
+      : codeValue === 'auth/invalid-credential'
+        ? 'Invalid account credentials.'
+        : codeValue === 'auth/user-disabled'
+          ? 'This account is disabled.'
+          : codeValue || detail;
     return {
       success: false,
-      error: codeValue === 'auth/invalid-credential'
-        ? 'Invalid access password.'
-        : `Account sign-in failed${codeValue ? ` (${codeValue})` : ''}.`
+      error: friendlyError === detail && detail
+        ? `Account sign-in failed: ${detail}`
+        : friendlyError
     };
   }
 }
