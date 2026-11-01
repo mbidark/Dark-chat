@@ -10,6 +10,8 @@ export default defineConfig(() => {
       },
     },
     build: {
+      // Copy PWA and FCM files from public/ into dist/.
+      copyPublicDir: true,
       rollupOptions: {
         input: {
           main: path.resolve(__dirname, 'index.html'),

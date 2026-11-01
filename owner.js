@@ -434,6 +434,16 @@ function toggleSidebar() {
   }
 }
 
+function openCreateAccountModal() {
+  accountNameInput.value = '';
+  accountCodeInput.value = '';
+  accountPasswordInput.value = '';
+  createAccountMessage.style.display = 'none';
+  createAccountModal.style.display = 'flex';
+  createAccountModal.setAttribute('aria-hidden', 'false');
+  accountNameInput.focus();
+}
+
 function setupEventListeners() {
   brandToggleBtn.addEventListener('click', toggleSidebar);
   if (brandMainToggleBtn) {
@@ -501,14 +511,7 @@ function setupEventListeners() {
     }
   });
 
-  createAccountBtn.addEventListener('click', () => {
-    accountNameInput.value = '';
-    accountCodeInput.value = '';
-    accountPasswordInput.value = '';
-    createAccountMessage.style.display = 'none';
-    createAccountModal.style.display = 'flex';
-    accountNameInput.focus();
-  });
+  createAccountBtn.addEventListener('click', openCreateAccountModal);
   closeCreateAccountBtn.addEventListener('click', () => {
     createAccountModal.style.display = 'none';
   });

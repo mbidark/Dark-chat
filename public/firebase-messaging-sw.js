@@ -14,9 +14,25 @@ const messaging = firebase.messaging();
 messaging.onBackgroundMessage((payload) => {
   const title = payload.notification?.title || payload.data?.title || 'DARKCHAT';
   const body = payload.notification?.body || payload.data?.body || '';
+  const url = payload.data?.url || './';
   self.registration.showNotification(title, {
     body,
-    icon: payload.data?.icon || './favicon.ico',
-    data: payload.data || {}
+    icon: payload.data?.icon || './icon.svg',
+    badge: './icon.svg',
+    data: { ...payload.data, url }
   });
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const targetUrl = event.notification.data?.url || './';
+  event.waitUntil(clients.matchAll({ type: 'window', includeUncontrolled: true }).then(windowClients => {
+    for (const client of windowClients) {
+      if ('focus' in client && new URL(client.url).origin === self.location.origin) {
+        client.navigate(targetUrl);
+        return client.focus();
+      }
+    }
+    return clients.openWindow(targetUrl);
+  }));
 });

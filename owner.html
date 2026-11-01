@@ -5,9 +5,18 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <title>DARKCHAT // OWNER CONTROL</title>
     <meta name="description" content="DARKCHAT Owner Dashboard by MBI DARK" />
+    <meta name="theme-color" content="#00ff66" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' }).catch(() => {});
+      }
+    </script>
     <div class="scanlines"></div>
 
     <div class="owner-container">
@@ -20,7 +29,8 @@
           </button>
           <div class="owner-action-bar" style="flex-wrap: wrap; gap: 4px;">
             <button id="refreshInboxBtn" class="term-btn">SYNC</button>
-            <button id="createAccountBtn" class="term-btn">CREATE USER</button>
+            <button id="createAccountBtn" class="term-btn" type="button"
+              onclick="document.getElementById('createAccountModal').style.display='flex'">CREATE USER</button>
             <button id="visitorAccessBtn" class="term-btn danger">BLOCKED USERS</button>
             <button id="logoutEveryoneBtn" class="term-btn danger">LOGOUT EVERYONE</button>
           </div>

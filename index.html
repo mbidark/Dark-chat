@@ -9,9 +9,18 @@
     <meta property="og:description" content="Real-time hacker terminal messaging website with same-name grouped inbox and unique visitor IDs." />
     <meta property="og:type" content="website" />
     <meta name="twitter:card" content="summary_large_image" />
+    <meta name="theme-color" content="#00ff66" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="icon" href="./icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="./icon.svg" />
     <link rel="stylesheet" href="./style.css" />
   </head>
   <body>
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('./firebase-messaging-sw.js', { scope: './' }).catch(() => {});
+      }
+    </script>
     <div class="scanlines"></div>
 
     <div class="app-container">
