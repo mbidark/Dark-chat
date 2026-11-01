@@ -407,6 +407,14 @@ export async function upsertVisitorProfile(visitor) {
   if (!db) return;
 
   try {
+    const existingProfile = await getDoc(doc(db, 'visitors', id));
+    if (existingProfile.exists()) {
+      await updateDoc(doc(db, 'visitors', id), {
+        lastActiveAt: new Date().toISOString(),
+        serverUpdatedAt: serverTimestamp()
+      });
+      return;
+    }
     await setDoc(doc(db, 'visitors', id), {
       ...payload,
       serverUpdatedAt: serverTimestamp()

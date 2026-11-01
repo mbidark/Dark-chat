@@ -87,7 +87,7 @@ service cloud.firestore {
 
       allow update: if isOwner() || (
         isUnblockedVisitor(visitorId) &&
-        incoming().diff(existing()).affectedKeys().hasOnly(['lastActiveAt', 'unreadCount', 'isArchived'])
+        incoming().diff(existing()).affectedKeys().hasOnly(['lastActiveAt', 'unreadCount', 'isArchived', 'serverUpdatedAt'])
       );
 
       // Private visitor message subcollection
