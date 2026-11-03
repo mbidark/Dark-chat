@@ -24,8 +24,9 @@ import {
   deleteVisitorUser,
   createRealVisitorAccount,
   logoutUser,
-  registerPushNotifications,
-  forceLogoutAllUsers
+  forceLogoutAllUsers,
+  restoreOwnerSession,
+  waitForAuthState
 } from './firebase.js';
 import { startInactiveLogout, hasSessionExpired } from './session-security.js';
 
@@ -64,7 +65,7 @@ const createAccountMessage = document.getElementById('createAccountMessage');
 const closeCreateAccountBtn = document.getElementById('closeCreateAccountBtn');
 const createAccountSubmitBtn = document.getElementById('createAccountSubmitBtn');
 const logoutEveryoneBtn = document.getElementById('logoutEveryoneBtn');
-const notificationEnableBtn = document.getElementById('notificationEnableBtn');
+
 
 // Auth Modals
 const loginModal = document.getElementById('loginModal');
@@ -452,15 +453,6 @@ function openCreateAccountModal() {
 }
 
 function setupEventListeners() {
-  notificationEnableBtn.addEventListener('click', async () => {
-    const result = await registerPushNotifications('owner');
-    if (result.success) {
-      notificationEnableBtn.textContent = 'NOTIFICATIONS ON';
-      appendTranscriptLine(`[SUCCESS] Owner notifications enabled.`, 'success-line');
-    } else {
-      appendTranscriptLine(`[ERROR] ${result.error || 'Notifications unavailable.'}`, 'error-line');
-    }
-  });
   brandToggleBtn.addEventListener('click', toggleSidebar);
   if (brandMainToggleBtn) {
     brandMainToggleBtn.addEventListener('click', toggleSidebar);
@@ -554,6 +546,7 @@ function setupEventListeners() {
 
   logoutBtn.addEventListener('click', async () => {
     await logoutUser();
+    localStorage.removeItem('darkchat_last_activity_owner');
     loginModal.style.display = 'flex';
   });
 
@@ -608,11 +601,11 @@ function setupEventListeners() {
       currentOwner = res.user;
       loginModal.style.display = 'none';
       initializeOwnerStream();
-      registerPushNotifications('owner');
       startInactiveLogout(async () => {
         await logoutUser();
+        localStorage.removeItem('darkchat_last_activity_owner');
         window.location.reload();
-      });
+      }, 'owner');
     } else {
       loginError.textContent = res.error || 'Access denied.';
       loginError.style.display = 'block';
@@ -648,9 +641,30 @@ function initializeOwnerStream() {
   });
 }
 
-function initOwner() {
+async function initOwner() {
   setupEventListeners();
   syncOwnerInputDisplay();
+
+  if (hasSessionExpired(Date.now(), 'owner')) {
+    localStorage.removeItem('darkchat_last_activity_owner');
+    await logoutUser();
+  }
+  const authUser = await waitForAuthState();
+  if (authUser && !authUser.isAnonymous) {
+    const owner = await restoreOwnerSession();
+    if (owner) {
+      currentOwner = owner;
+      loginModal.style.display = 'none';
+      initializeOwnerStream();
+      startInactiveLogout(async () => {
+        await logoutUser();
+        localStorage.removeItem('darkchat_last_activity_owner');
+        window.location.reload();
+      }, 'owner');
+      return;
+    }
+  }
+
   currentOwner = null;
   loginModal.style.display = 'flex';
   ownerPasswordInput.focus();

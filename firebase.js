@@ -49,6 +49,26 @@ export async function logoutUser() {
   }
 }
 
+export function waitForAuthState() {
+  return new Promise((resolve) => {
+    if (!auth) {
+      resolve(null);
+      return;
+    }
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      unsubscribe();
+      resolve(user);
+    });
+  });
+}
+
+export async function restoreOwnerSession() {
+  if (!auth?.currentUser || auth.currentUser.isAnonymous || !db) return null;
+  const snapshot = await getDoc(doc(db, 'admins', auth.currentUser.uid));
+  if (!snapshot.exists() || snapshot.data().role !== 'owner') return null;
+  return { uid: auth.currentUser.uid, email: auth.currentUser.email, role: 'owner' };
+}
+
 export async function forceLogoutAllUsers() {
   if (!db || !auth?.currentUser) throw new Error('Owner authentication required.');
   await setDoc(doc(db, 'settings', 'globalSession'), {
@@ -70,6 +90,7 @@ export function subscribeToGlobalSessionRevision(callback, onError = () => {}) {
       return;
     }
     if (baseline && revision && revision !== baseline) {
+      localStorage.setItem(key, revision);
       callback(true);
     }
   }, onError);

@@ -26,8 +26,8 @@ import {
   verifyVisitorPassword,
   restoreVisitorSession,
   logoutUser,
-  registerPushNotifications,
-  subscribeToGlobalSessionRevision
+  subscribeToGlobalSessionRevision,
+  waitForAuthState
 } from './firebase.js';
 import { startInactiveLogout, hasSessionExpired } from './session-security.js';
 
@@ -43,7 +43,7 @@ const typingIndicator = document.getElementById('typingIndicator');
 const connStatus = document.getElementById('connStatus');
 const visitorTag = document.getElementById('visitorTag');
 const userLogoutBtn = document.getElementById('userLogoutBtn');
-const notificationEnableBtn = document.getElementById('notificationEnableBtn');
+
 
 // State machine
 const STATE_INIT = 'INIT';
@@ -159,18 +159,9 @@ function focusTerminal() {
 }
 
 function setupInputListeners() {
-  notificationEnableBtn.addEventListener('click', async () => {
-    const result = await registerPushNotifications('visitor');
-    if (result.success) {
-      notificationEnableBtn.textContent = 'NOTIFICATIONS ON';
-      appendLine(`[SUCCESS] Notifications enabled.`, 'success-line');
-    } else {
-      appendLine(`[ERROR] ${escapeHtml(result.error || 'Notifications unavailable.')}`, 'error-line');
-    }
-  });
   userLogoutBtn.addEventListener('click', async () => {
     await logoutUser();
-    localStorage.removeItem('darkchat_last_activity');
+    localStorage.removeItem('darkchat_last_activity_visitor');
     for (const key of Object.keys(localStorage)) {
       if (key.startsWith('darkchat_visitor_session_')) localStorage.removeItem(key);
     }
@@ -183,6 +174,7 @@ function setupInputListeners() {
           if (key.startsWith('darkchat_visitor_session_') || key.startsWith('darkchat_public_')) {
             localStorage.removeItem(key);
           }
+          localStorage.removeItem('darkchat_last_activity_visitor');
         }
         window.location.reload();
       });
@@ -380,14 +372,12 @@ async function handlePasswordInput(rawPassword) {
     promptPrefix.textContent = `~ $ `;
     syncInputDisplay();
     startChatSubscriptions(result.visitor.id);
-    registerPushNotifications('visitor').then(result => {
-      if (!result.success && result.error) console.info('Push notification setup:', result.error);
-    });
     startInactiveLogout(async () => {
       await logoutUser();
+      localStorage.removeItem('darkchat_last_activity_visitor');
       localStorage.removeItem(`darkchat_visitor_session_${result.visitor.id}`);
       window.location.reload();
-    });
+    }, 'visitor');
     return;
   }
 
@@ -445,19 +435,18 @@ async function initializeVisitorSession(displayName) {
         visitorTag.style.display = 'inline';
       }
       userLogoutBtn.style.display = 'inline-block';
-      notificationEnableBtn.style.display = 'inline-block';
+      startInactiveLogout(async () => {
+        await logoutUser();
+        localStorage.removeItem('darkchat_last_activity_visitor');
+        localStorage.removeItem(`darkchat_visitor_session_${visitorId}`);
+        window.location.reload();
+      });
 
       currentState = STATE_CHAT;
       promptPrefix.textContent = `~ $ `;
       syncInputDisplay();
 
       startChatSubscriptions(visitorId);
-      registerPushNotifications('visitor');
-      startInactiveLogout(async () => {
-        await logoutUser();
-        localStorage.removeItem('darkchat_last_activity');
-        window.location.reload();
-      });
       focusTerminal();
     }, 400);
 
@@ -472,7 +461,6 @@ async function activateRealVisitor(visitor) {
   visitorTag.textContent = `ID: ${visitor.publicId}`;
   visitorTag.style.display = 'inline';
   userLogoutBtn.style.display = 'inline-block';
-  notificationEnableBtn.style.display = 'inline-block';
   connStatus.textContent = '[CONNECTED]';
   connStatus.style.display = 'inline';
   terminalLines.innerHTML = '';
@@ -482,10 +470,10 @@ async function activateRealVisitor(visitor) {
   promptPrefix.textContent = `~ $ `;
   syncInputDisplay();
   startChatSubscriptions(visitor.id);
-  registerPushNotifications('visitor');
   startInactiveLogout(async () => {
     await logoutUser();
-    localStorage.removeItem('darkchat_last_activity');
+    localStorage.removeItem('darkchat_last_activity_visitor');
+    localStorage.removeItem(`darkchat_visitor_session_${visitor.id}`);
     window.location.reload();
   });
 }
@@ -661,9 +649,26 @@ async function startTerminal() {
   setupInputListeners();
   syncInputDisplay();
   focusTerminal();
-  if (hasSessionExpired()) {
-    localStorage.removeItem('darkchat_last_activity');
+  if (hasSessionExpired(Date.now(), 'visitor')) {
+    localStorage.removeItem('darkchat_last_activity_visitor');
     await logoutUser();
+  }
+  const authUser = await waitForAuthState();
+  if (authUser && !authUser.isAnonymous) {
+    const visitor = await restoreVisitorSession();
+    if (visitor) {
+      await activateRealVisitor(visitor);
+      return;
+    }
+  }
+  if (authUser?.isAnonymous) {
+    const storedSession = localStorage.getItem(`darkchat_visitor_session_${authUser.uid}`);
+    if (storedSession) {
+      try {
+        await activateRealVisitor(JSON.parse(storedSession));
+        return;
+      } catch (_) {}
+    }
   }
   await startFastLoading();
 }
